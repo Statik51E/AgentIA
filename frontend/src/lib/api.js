@@ -24,19 +24,40 @@ async function req(path, opts = {}) {
 
 export const api = {
   finances: {
-    list: () => req('/finances'),
+    list: (filters = {}) => {
+      const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== undefined && v !== '' && v !== null)).toString();
+      return req(`/finances${q ? `?${q}` : ''}`);
+    },
     summary: () => req('/finances/summary'),
     add: (data) => req('/finances', { method: 'POST', body: data }),
+    patch: (id, data) => req(`/finances/${id}`, { method: 'PATCH', body: data }),
     del: (id) => req(`/finances/${id}`, { method: 'DELETE' }),
+    exportCsv: async () => {
+      const auth = await authHeaders();
+      const r = await fetch(`${BASE}/finances/export.csv`, { headers: auth });
+      if (!r.ok) throw new Error(`HTTP ${r.status}`);
+      return r.blob();
+    },
     listFixed: () => req('/finances/fixed'),
     addFixed: (data) => req('/finances/fixed', { method: 'POST', body: data }),
     patchFixed: (id, data) => req(`/finances/fixed/${id}`, { method: 'PATCH', body: data }),
     delFixed: (id) => req(`/finances/fixed/${id}`, { method: 'DELETE' }),
-    stats: () => req('/finances/stats'),
+    stats: (month) => req(`/finances/stats${month ? `?month=${month}` : ''}`),
+    history: (months = 12) => req(`/finances/history?months=${months}`),
     listBudgets: () => req('/finances/budgets'),
     addBudget: (data) => req('/finances/budgets', { method: 'POST', body: data }),
     patchBudget: (id, data) => req(`/finances/budgets/${id}`, { method: 'PATCH', body: data }),
     delBudget: (id) => req(`/finances/budgets/${id}`, { method: 'DELETE' }),
+    listAccounts: () => req('/finances/accounts'),
+    addAccount: (data) => req('/finances/accounts', { method: 'POST', body: data }),
+    patchAccount: (id, data) => req(`/finances/accounts/${id}`, { method: 'PATCH', body: data }),
+    delAccount: (id) => req(`/finances/accounts/${id}`, { method: 'DELETE' }),
+    transfer: (data) => req('/finances/accounts/transfer', { method: 'POST', body: data }),
+    listGoals: () => req('/finances/goals'),
+    addGoal: (data) => req('/finances/goals', { method: 'POST', body: data }),
+    patchGoal: (id, data) => req(`/finances/goals/${id}`, { method: 'PATCH', body: data }),
+    contributeGoal: (id, montant) => req(`/finances/goals/${id}/contribute`, { method: 'POST', body: { montant } }),
+    delGoal: (id) => req(`/finances/goals/${id}`, { method: 'DELETE' }),
     analyzeStatement: (texte) => req('/finances/statement/analyze', { method: 'POST', body: { texte } }),
     analyzeStatementPDF: async (file) => {
       const fd = new FormData();

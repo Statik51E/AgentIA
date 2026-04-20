@@ -90,10 +90,31 @@ CREATE TABLE IF NOT EXISTS budgets (
   date TEXT NOT NULL DEFAULT (datetime('now')),
   UNIQUE(user_id, categorie)
 );
+
+CREATE TABLE IF NOT EXISTS accounts (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL DEFAULT '',
+  nom TEXT NOT NULL,
+  type TEXT NOT NULL DEFAULT 'courant' CHECK(type IN ('courant','epargne','espece','credit','autre')),
+  solde_initial REAL NOT NULL DEFAULT 0,
+  couleur TEXT,
+  date TEXT NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS savings_goals (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  user_id TEXT NOT NULL DEFAULT '',
+  nom TEXT NOT NULL,
+  cible REAL NOT NULL,
+  actuel REAL NOT NULL DEFAULT 0,
+  deadline TEXT,
+  account_id INTEGER,
+  date TEXT NOT NULL DEFAULT (datetime('now'))
+);
 `);
 
 // Migration : ajoute user_id aux tables existantes si absent
-const TABLES = ['finances', 'projects', 'tasks', 'ideas', 'ai_logs', 'ai_actions', 'fixed_expenses', 'budgets'];
+const TABLES = ['finances', 'projects', 'tasks', 'ideas', 'ai_logs', 'ai_actions', 'fixed_expenses', 'budgets', 'accounts', 'savings_goals'];
 for (const t of TABLES) {
   const cols = db.prepare(`PRAGMA table_info(${t})`).all();
   if (!cols.some(c => c.name === 'user_id')) {
@@ -132,16 +153,29 @@ try {
   }
 } catch (e) { console.warn('[DB] rebuild budgets ignoré :', e.message); }
 
+// Migration : ajoute account_id à finances si absent
+try {
+  const cols = db.prepare(`PRAGMA table_info(finances)`).all();
+  if (!cols.some(c => c.name === 'account_id')) {
+    db.exec(`ALTER TABLE finances ADD COLUMN account_id INTEGER`);
+    console.log('[DB] migration : account_id ajouté à finances');
+  }
+} catch (e) { console.warn('[DB] migration account_id finances ignorée :', e.message); }
+
 // Index utiles pour scoper par user_id
 db.exec(`
-  CREATE INDEX IF NOT EXISTS idx_finances_user ON finances(user_id);
-  CREATE INDEX IF NOT EXISTS idx_projects_user ON projects(user_id);
-  CREATE INDEX IF NOT EXISTS idx_tasks_user    ON tasks(user_id);
-  CREATE INDEX IF NOT EXISTS idx_ideas_user    ON ideas(user_id);
-  CREATE INDEX IF NOT EXISTS idx_ai_logs_user  ON ai_logs(user_id);
-  CREATE INDEX IF NOT EXISTS idx_ai_actions_user ON ai_actions(user_id);
-  CREATE INDEX IF NOT EXISTS idx_fixed_user    ON fixed_expenses(user_id);
-  CREATE INDEX IF NOT EXISTS idx_budgets_user  ON budgets(user_id);
+  CREATE INDEX IF NOT EXISTS idx_finances_user    ON finances(user_id);
+  CREATE INDEX IF NOT EXISTS idx_finances_account ON finances(account_id);
+  CREATE INDEX IF NOT EXISTS idx_finances_date    ON finances(user_id, date);
+  CREATE INDEX IF NOT EXISTS idx_projects_user    ON projects(user_id);
+  CREATE INDEX IF NOT EXISTS idx_tasks_user       ON tasks(user_id);
+  CREATE INDEX IF NOT EXISTS idx_ideas_user       ON ideas(user_id);
+  CREATE INDEX IF NOT EXISTS idx_ai_logs_user     ON ai_logs(user_id);
+  CREATE INDEX IF NOT EXISTS idx_ai_actions_user  ON ai_actions(user_id);
+  CREATE INDEX IF NOT EXISTS idx_fixed_user       ON fixed_expenses(user_id);
+  CREATE INDEX IF NOT EXISTS idx_budgets_user     ON budgets(user_id);
+  CREATE INDEX IF NOT EXISTS idx_accounts_user    ON accounts(user_id);
+  CREATE INDEX IF NOT EXISTS idx_goals_user       ON savings_goals(user_id);
 `);
 
 export default db;
