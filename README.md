@@ -1,197 +1,73 @@
-# CORE IA ULTIMATE
+# AgentIA — CORE IA ULTIMATE
 
-Système personnel intelligent — PWA installable (mobile + desktop), 100% local par défaut.
-Finances · Projets · Idées · Agent IA (semi-autonome, extensible vers autonome).
+App personnelle 100% gratuite : **finances, projets, idées, agent IA**. Déployée sur GitHub Pages, données stockées par utilisateur dans Firestore, IA via Groq avec ta propre clé API.
 
-## Stack
+→ **[statik51e.github.io/AgentIA](https://statik51e.github.io/AgentIA/)**
 
-- **Frontend** : React 18 + Vite + PWA (service worker + manifest + cache runtime API).
-- **Backend**  : Node.js + Express + SQLite (better-sqlite3).
-- **IA**       : interface `AIProvider` unique.
-  - `stub` (défaut) : heuristiques internes, offline, zéro dépendance réseau.
-  - `ollama` : LLM local via `http://localhost:11434` — bascule par `.env`.
+## Architecture
 
-## Arborescence
+- **Frontend** : React 18 + Vite + PWA installable, déployé sur **GitHub Pages**.
+- **Auth** : Firebase Auth (email/password + Google).
+- **Données** : Firestore — chaque utilisateur a sa propre sous-collection `users/{uid}/...`, isolation garantie par les security rules.
+- **IA** : Groq (llama-3.3-70b-versatile par défaut), clé API **fournie par chaque utilisateur** dans ses Paramètres et stockée dans son document Firestore.
+- **Pas de backend serveur** : tout tourne dans le navigateur.
 
-```
-core-ia-ultimate/
-├── backend/
-│   ├── package.json
-│   ├── .env.example
-│   ├── data/                         # SQLite (créé au 1er lancement)
-│   └── src/
-│       ├── server.js                 # Express app + boucle suggestions
-│       ├── db.js                     # Schéma SQLite + migrations implicites
-│       ├── routes/
-│       │   ├── finances.js           # /finances
-│       │   ├── projects.js           # /projects (+ tasks)
-│       │   ├── ideas.js              # /ideas  (+ convert → project)
-│       │   ├── ai.js                 # /ai/analyze /ai/logs /ai/daily
-│       │   ├── suggestions.js        # /suggestions (semi-autonome)
-│       │   └── actions.js            # /actions (validation + historique)
-│       └── services/
-│           ├── aiProvider.js         # stub intelligent + hook Ollama
-│           ├── scoring.js            # scores finance & productivité + anomalies
-│           ├── suggestionsEngine.js  # analyse périodique → actions suggérées
-│           └── actionExecutor.js     # exécute une action validée
-└── frontend/
-    ├── package.json
-    ├── vite.config.js                # PWA + proxy /api → :4000
-    ├── index.html
-    ├── public/icons/                 # SVG 192 + 512 (manifest)
-    └── src/
-        ├── main.jsx
-        ├── App.jsx
-        ├── lib/api.js                # client REST
-        ├── components/ (Sidebar, TopBar, Card)
-        ├── pages/ (Dashboard, Finances, Projets, Idees, IA)
-        └── styles/theme.css          # thème dark premium
-```
+## Premier lancement utilisateur
 
-## Installation & lancement
+1. Créer un compte ou se connecter avec Google.
+2. Aller dans **Paramètres**, coller une clé Groq (gratuite sur [console.groq.com/keys](https://console.groq.com/keys)).
+3. Cliquer **Tester la clé** puis **Enregistrer**.
+4. L'app est prête : finances, projets, idées, carte mentale IA, brainstorm auto.
 
-### 1. Backend
+Sans clé Groq, toutes les fonctions IA sont désactivées mais le reste de l'app (saisies, budgets, comptes, objectifs) fonctionne.
 
-```bash
-cd backend
-cp .env.example .env
-npm install
-npm run dev          # port 4000
-```
+## Déploiement
 
-La DB `backend/data/core.db` est créée automatiquement au premier démarrage.
-Le moteur de suggestions tourne en tâche de fond (cycle toutes les 10 min + cycle initial à 30s).
+Chaque push sur `main` déclenche `.github/workflows/deploy.yml` qui build et publie sur GitHub Pages.
 
-### 2. Frontend
+### Configuration Firebase (une fois)
+
+1. **Console Firebase → Authentication → Settings → Authorized domains** : ajouter `statik51e.github.io`.
+2. **Console Firebase → Firestore → Rules** : copier le contenu de `firestore.rules` et publier.
+
+### Configuration GitHub (une fois)
+
+1. **Repo Settings → Pages → Source** : *GitHub Actions*.
+
+## Dev local
 
 ```bash
 cd frontend
 npm install
-npm run dev          # port 5173
+npm run dev     # http://localhost:5173
 ```
 
-Ouvre http://localhost:5173. Le frontend proxifie `/api/*` → `http://localhost:4000/*`.
+## Fonctionnalités
 
-### 3. Build production (pour installer la PWA)
+### Finances (7 onglets)
+- **Vue d'ensemble** : KPIs du mois, conseils IA, budgets, totaux par catégorie.
+- **Mouvements** : CRUD + filtres (type, catégorie, compte, période, recherche) + export CSV.
+- **Comptes** : patrimoine multi-comptes + transferts (dépense + revenu liés, catégorie `transfert` exclue des stats).
+- **Objectifs** : épargne avec progression, deadlines, contributions +/-.
+- **Évolution** : graphique SVG 3/6/12 mois, meilleur/pire mois.
+- **Charges fixes** : total actives, activation/désactivation.
+- **Import relevé** : PDF (parsing client-side via pdf.js) ou texte, analyse IA.
 
-```bash
-cd frontend
-npm run build
-npm run preview      # sert le build buildé (localhost:4173)
-```
+### Projets
+- CRUD + tâches + cycle de statut.
+- **Carte mentale IA** : brainstorm autonome par projet — l'agent IA génère des branches (objectifs, étapes, risques, ressources, idées, opportunités) avec enfants actionnables, rendu SVG radial.
+- **Brainstorm batch** : un clic pour générer les cartes sur tous les projets sans carte.
 
-> En dev, la PWA est active (`devOptions.enabled = true`). En prod (`npm run build`), le service worker est optimisé et la PWA est pleinement installable.
+### Idées
+- Capture rapide + structuration IA automatique + conversion en projet.
 
-## Installer la PWA
+### CORE IA
+- Analyse texte libre (finance/projet/idée/tâche/libre) → analyse, structure, améliorations, actions.
+- Suggestions autonomes : scan périodique des données pour proposer des actions (projet stagnant, idée à convertir, anomalie financière, etc.).
+- Historique des décisions validées / rejetées.
 
-### Desktop (Chrome / Edge / Brave)
-1. Lance le frontend en build (`npm run preview`) ou en dev.
-2. Dans la barre d'adresse, clique sur l'icône **Installer** (à droite de l'URL).
-3. L'app s'ouvre dans sa propre fenêtre, avec icône dans le menu démarrer.
+## Sécurité
 
-### Mobile iOS (Safari)
-1. Ouvre l'app dans Safari.
-2. Bouton **Partager** → **Sur l'écran d'accueil**.
-3. L'icône apparaît. Ouverture plein écran, offline partiel.
-
-### Mobile Android (Chrome)
-1. Ouvre l'app dans Chrome.
-2. Menu (⋮) → **Installer l'application** (ou bannière automatique).
-3. L'icône est placée sur l'écran d'accueil.
-
-> Pour tester depuis un autre appareil sur ton réseau, lance `npm run preview -- --host` côté frontend et mets `VITE_API_URL` vers `http://IP-DE-TON-PC:4000` (ou adapte le proxy).
-
-## Fonctionnement
-
-### CORE IA — contrat JSON strict
-
-Toute entrée utilisateur passée à `POST /ai/analyze` renvoie :
-
-```json
-{
-  "type": "finance | projet | idee | tache | libre",
-  "analyse": "…",
-  "structure": "…",
-  "ameliorations": "…",
-  "actions": ["…", "…"]
-}
-```
-
-Le stub détecte automatiquement le type d'entrée (`detectEntryType`) et applique une heuristique dédiée. Le hook Ollama (`AI_PROVIDER=ollama`) utilise `format: "json"` pour garantir la même forme.
-
-### Agent semi-autonome
-
-Toutes les 10 min (+ cycle initial), `suggestionsEngine` scanne la DB et produit des suggestions dans `ai_actions (statut='suggere')` :
-
-- anomalies financières (max > 3× médiane par catégorie),
-- projets stagnants (>7j à `todo`),
-- idées non converties (>3j),
-- score productivité / financier bas.
-
-L'UI (Dashboard + page CORE IA) les affiche avec **Valider** / **Rejeter**.
-
-### Agent autonome (base)
-
-- **Actions suggérées** → `ai_actions.statut = 'suggere'`.
-- **Validation** → `executeAction(...)` applique une mutation concrète (relancer un projet, convertir une idée, etc.) puis marque `'execute'`.
-- **Rejet** → `'rejete'`.
-- **Historique des décisions** : onglet dédié dans la page CORE IA.
-
-Extension future : autoriser `executeAction` à tourner sans validation pour certains types (flag `auto_execute` par type d'action). L'architecture est déjà là.
-
-## Passer en mode LLM local (Ollama)
-
-```bash
-# 1. Installer Ollama https://ollama.com
-ollama pull llama3.1
-
-# 2. backend/.env
-AI_PROVIDER=ollama
-OLLAMA_URL=http://localhost:11434
-OLLAMA_MODEL=llama3.1
-
-# 3. Relancer le backend
-npm run dev
-```
-
-Si Ollama est indisponible, le backend **retombe automatiquement** sur le stub (journal console).
-
-## Évolutions prévues
-
-- **IA locale** : déjà branchée (Ollama). Ajouter d'autres backends → un fichier `services/aiProvider.js`.
-- **Auto-exécution** : ajouter `auto_execute` par type dans `actionExecutor`.
-- **Sync cloud** : ajouter un adapter `services/sync/*` (S3/Drive/WebDAV) autour de `core.db`.
-- **Notifications push** : `Notification.requestPermission()` côté frontend + Web Push côté backend.
-
-## Endpoints API
-
-| Méthode | Route | Usage |
-|---|---|---|
-| GET  | `/finances` | liste |
-| GET  | `/finances/summary` | totaux + anomalies |
-| POST | `/finances` | ajouter |
-| DEL  | `/finances/:id` | supprimer |
-| GET  | `/projects` | projets + tasks |
-| POST | `/projects` | créer (priorité auto) |
-| PATCH| `/projects/:id` | modifier |
-| POST | `/projects/:id/tasks` | ajouter tâche |
-| PATCH| `/projects/:pid/tasks/:tid` | modifier tâche |
-| GET  | `/ideas` | liste |
-| POST | `/ideas` | capturer (structuration auto) |
-| POST | `/ideas/:id/convert` | → projet |
-| POST | `/ai/analyze` | analyse JSON stricte |
-| GET  | `/ai/daily` | résumé + scores |
-| GET  | `/ai/logs` | journal IA |
-| GET  | `/suggestions` | suggestions courantes |
-| POST | `/suggestions/run` | forcer un cycle |
-| GET  | `/actions` | historique complet |
-| POST | `/actions/:id/validate` | exécuter |
-| POST | `/actions/:id/reject` | rejeter |
-
-## Contraintes respectées
-
-- Code modulaire (routes/services séparés), aucun code mort.
-- DB auto-créée, projet fonctionnel immédiatement.
-- UI premium : dark par défaut, responsive, sidebar adaptative, animations légères (`fade-in`, transitions cubic-bezier).
-- PWA : manifest complet, SW, installable, cache runtime API, offline partiel.
-- Architecture prête pour LLM local, auto-exécution, sync cloud.
+- Chaque document Firestore `users/{uid}/...` n'est lisible que par son propriétaire (rules).
+- La clé Groq utilisateur ne quitte jamais Firestore + son navigateur.
+- Les appels Groq partent du client avec sa propre clé — aucun serveur intermédiaire à maintenir.

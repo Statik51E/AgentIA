@@ -1,106 +1,149 @@
-import { getIdToken } from './auth.jsx';
+/**
+ * API shim — surface identique à l'ancien backend HTTP, mais 100% client-side
+ * (Firestore pour la data, Groq direct pour l'IA). Permet de ne pas toucher
+ * la majorité des pages existantes.
+ */
 
-const BASE = import.meta.env.VITE_API_URL || '/api';
-
-async function authHeaders() {
-  const token = await getIdToken();
-  return token ? { Authorization: `Bearer ${token}` } : {};
-}
-
-async function req(path, opts = {}) {
-  const auth = await authHeaders();
-  const r = await fetch(`${BASE}${path}`, {
-    headers: { 'content-type': 'application/json', ...auth },
-    ...opts,
-    body: opts.body ? JSON.stringify(opts.body) : undefined,
-  });
-  if (!r.ok) {
-    let msg = `HTTP ${r.status}`;
-    try { const j = await r.json(); msg = j.error || msg; } catch {}
-    throw new Error(msg);
-  }
-  return r.status === 204 ? null : r.json();
-}
+import * as data from './dataService.js';
+import * as ai from './aiClient.js';
+import * as agent from './agent.js';
+import { monthlyStats, monthlyHistory, dailyScores } from './statsClient.js';
 
 export const api = {
   finances: {
-    list: (filters = {}) => {
-      const q = new URLSearchParams(Object.entries(filters).filter(([, v]) => v !== undefined && v !== '' && v !== null)).toString();
-      return req(`/finances${q ? `?${q}` : ''}`);
-    },
-    summary: () => req('/finances/summary'),
-    add: (data) => req('/finances', { method: 'POST', body: data }),
-    patch: (id, data) => req(`/finances/${id}`, { method: 'PATCH', body: data }),
-    del: (id) => req(`/finances/${id}`, { method: 'DELETE' }),
+    list: (filters = {}) => data.listFinances(filters),
+    summary: () => data.financesSummary(),
+    add: (d) => data.addFinance(d),
+    patch: (id, d) => data.patchFinance(id, d),
+    del: (id) => data.delFinance(id),
     exportCsv: async () => {
-      const auth = await authHeaders();
-      const r = await fetch(`${BASE}/finances/export.csv`, { headers: auth });
-      if (!r.ok) throw new Error(`HTTP ${r.status}`);
-      return r.blob();
+      const rows = await data.listFinances({ limit: 2000 });
+      const accounts = await data.listAccounts();
+      const accMap = Object.fromEntries(accounts.map(a => [a.id, a.nom]));
+      const head = 'date,type,montant,categorie,note,compte\n';
+      const body = rows.map(r => [
+        r.date, r.type, r.montant,
+        csvCell(r.categorie), csvCell(r.note),
+        csvCell(r.account_id ? accMap[r.account_id] : ''),
+      ].join(',')).join('\n');
+      return new Blob([head + body], { type: 'text/csv;charset=utf-8' });
     },
-    listFixed: () => req('/finances/fixed'),
-    addFixed: (data) => req('/finances/fixed', { method: 'POST', body: data }),
-    patchFixed: (id, data) => req(`/finances/fixed/${id}`, { method: 'PATCH', body: data }),
-    delFixed: (id) => req(`/finances/fixed/${id}`, { method: 'DELETE' }),
-    stats: (month) => req(`/finances/stats${month ? `?month=${month}` : ''}`),
-    history: (months = 12) => req(`/finances/history?months=${months}`),
-    listBudgets: () => req('/finances/budgets'),
-    addBudget: (data) => req('/finances/budgets', { method: 'POST', body: data }),
-    patchBudget: (id, data) => req(`/finances/budgets/${id}`, { method: 'PATCH', body: data }),
-    delBudget: (id) => req(`/finances/budgets/${id}`, { method: 'DELETE' }),
-    listAccounts: () => req('/finances/accounts'),
-    addAccount: (data) => req('/finances/accounts', { method: 'POST', body: data }),
-    patchAccount: (id, data) => req(`/finances/accounts/${id}`, { method: 'PATCH', body: data }),
-    delAccount: (id) => req(`/finances/accounts/${id}`, { method: 'DELETE' }),
-    transfer: (data) => req('/finances/accounts/transfer', { method: 'POST', body: data }),
-    listGoals: () => req('/finances/goals'),
-    addGoal: (data) => req('/finances/goals', { method: 'POST', body: data }),
-    patchGoal: (id, data) => req(`/finances/goals/${id}`, { method: 'PATCH', body: data }),
-    contributeGoal: (id, montant) => req(`/finances/goals/${id}/contribute`, { method: 'POST', body: { montant } }),
-    delGoal: (id) => req(`/finances/goals/${id}`, { method: 'DELETE' }),
-    analyzeStatement: (texte) => req('/finances/statement/analyze', { method: 'POST', body: { texte } }),
+
+    listFixed: () => data.listFixed(),
+    addFixed: (d) => data.addFixed(d),
+    patchFixed: (id, d) => data.patchFixed(id, d),
+    delFixed: (id) => data.delFixed(id),
+
+    stats: (month) => monthlyStats(month || null),
+    history: (months = 12) => monthlyHistory(months),
+
+    listBudgets: () => data.listBudgets(),
+    addBudget: (d) => data.addBudget(d),
+    patchBudget: (id, d) => data.patchBudget(id, d),
+    delBudget: (id) => data.delBudget(id),
+
+    listAccounts: () => data.listAccounts(),
+    addAccount: (d) => data.addAccount(d),
+    patchAccount: (id, d) => data.patchAccount(id, d),
+    delAccount: (id) => data.delAccount(id),
+    transfer: (d) => data.transferBetweenAccounts(d),
+
+    listGoals: () => data.listGoals(),
+    addGoal: (d) => data.addGoal(d),
+    patchGoal: (id, d) => data.patchGoal(id, d),
+    contributeGoal: (id, montant) => data.contributeGoal(id, montant),
+    delGoal: (id) => data.delGoal(id),
+
+    analyzeStatement: (texte) => ai.analyzeStatement(texte),
     analyzeStatementPDF: async (file) => {
-      const fd = new FormData();
-      fd.append('file', file);
-      const auth = await authHeaders();
-      const r = await fetch(`${BASE}/finances/statement/pdf`, { method: 'POST', body: fd, headers: auth });
-      if (!r.ok) {
-        let msg = `HTTP ${r.status}`;
-        try { const j = await r.json(); msg = j.error || msg; } catch {}
-        throw new Error(msg);
-      }
-      return r.json();
+      const texte = await extractPdfText(file);
+      if (!texte || texte.length < 20) throw new Error('PDF vide ou illisible');
+      const res = await ai.analyzeStatement(texte);
+      return { ...res, texte_extrait_apercu: texte.slice(0, 400) };
     },
-    importStatement: (data) => req('/finances/statement/import', { method: 'POST', body: data }),
+    importStatement: (d) => data.importStatement(d),
   },
+
   projects: {
-    list: () => req('/projects'),
-    add: (data) => req('/projects', { method: 'POST', body: data }),
-    patch: (id, data) => req(`/projects/${id}`, { method: 'PATCH', body: data }),
-    del: (id) => req(`/projects/${id}`, { method: 'DELETE' }),
-    addTask: (pid, data) => req(`/projects/${pid}/tasks`, { method: 'POST', body: data }),
-    patchTask: (pid, tid, data) => req(`/projects/${pid}/tasks/${tid}`, { method: 'PATCH', body: data }),
-    delTask: (pid, tid) => req(`/projects/${pid}/tasks/${tid}`, { method: 'DELETE' }),
+    list: () => data.listProjects(),
+    add: (d) => data.addProject(d),
+    patch: (id, d) => data.patchProject(id, d),
+    del: (id) => data.delProject(id),
+    addTask: (pid, d) => data.addTask(pid, d),
+    patchTask: (pid, tid, d) => data.patchTask(pid, tid, d),
+    delTask: (pid, tid) => data.delTask(pid, tid),
+    brainstorm: async (projectId) => {
+      const projects = await data.listProjects();
+      const p = projects.find(x => x.id === projectId);
+      if (!p) throw new Error('projet introuvable');
+      const mindmap = await ai.brainstormMindmap(p);
+      await data.patchProject(projectId, { mindmap });
+      return mindmap;
+    },
   },
+
   ideas: {
-    list: () => req('/ideas'),
-    add: (data) => req('/ideas', { method: 'POST', body: data }),
-    del: (id) => req(`/ideas/${id}`, { method: 'DELETE' }),
-    convert: (id) => req(`/ideas/${id}/convert`, { method: 'POST' }),
+    list: () => data.listIdeas(),
+    add: async ({ contenu }) => {
+      let structure = null, tags = [];
+      try { const r = await ai.structureIdea(contenu); structure = r.structure; tags = r.tags; }
+      catch { tags = contenu ? [] : []; }
+      return data.addIdea({ contenu, structure, tags });
+    },
+    del: (id) => data.delIdea(id),
+    convert: (id) => data.convertIdea(id),
   },
+
   ai: {
-    analyze: (entree) => req('/ai/analyze', { method: 'POST', body: { entree } }),
-    logs: () => req('/ai/logs'),
-    daily: () => req('/ai/daily'),
-    advice: () => req('/ai/advice'),
+    analyze: async (entree) => {
+      const type = ai.detectEntryType(entree);
+      const result = await ai.analyzeEntry(entree, type);
+      try { await data.addAiLog({ type, contenu: { entree, result } }); } catch {}
+      return { type, ...result };
+    },
+    logs: () => data.listAiLogs(),
+    daily: () => dailyScores(),
+    advice: async () => {
+      const stats = await monthlyStats();
+      const advice = await ai.generateFinanceAdvice(stats);
+      return { stats, ...advice };
+    },
   },
+
   suggestions: {
-    list: () => req('/suggestions'),
-    run: () => req('/suggestions/run', { method: 'POST' }),
+    list: () => data.listSuggestions(),
+    run: async () => { const created = await agent.generateSuggestions(); return { created }; },
   },
+
   actions: {
-    list: () => req('/actions'),
-    validate: (id) => req(`/actions/${id}/validate`, { method: 'POST' }),
-    reject: (id) => req(`/actions/${id}/reject`, { method: 'POST' }),
+    list: () => data.listActions(),
+    validate: (id) => agent.validateAction(id),
+    reject: (id) => agent.rejectAction(id),
+  },
+
+  settings: {
+    get: () => data.getSettings(),
+    save: (patch) => data.saveSettings(patch),
   },
 };
+
+function csvCell(s) {
+  if (s == null) return '';
+  const v = String(s);
+  return /[",\n]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v;
+}
+
+async function extractPdfText(file) {
+  const pdfjs = await import('pdfjs-dist/build/pdf.mjs');
+  const workerUrl = new URL('pdfjs-dist/build/pdf.worker.mjs', import.meta.url).toString();
+  pdfjs.GlobalWorkerOptions.workerSrc = workerUrl;
+  const buf = await file.arrayBuffer();
+  const pdf = await pdfjs.getDocument({ data: buf }).promise;
+  let text = '';
+  for (let i = 1; i <= pdf.numPages; i++) {
+    const page = await pdf.getPage(i);
+    const content = await page.getTextContent();
+    text += content.items.map(it => it.str).join(' ') + '\n';
+  }
+  return text.trim();
+}

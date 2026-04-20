@@ -153,4 +153,4 @@ export default function Transactions({ accounts, onChanged }) {
 }
 
 function fmt(n) { return (Number(n) || 0).toLocaleString('fr-FR', { maximumFractionDigits: 2 }); }
-function formatDate(s) { try { return new Date(s.replace(' ', 'T') + 'Z').toLocaleString('fr-FR'); } catch { return s; } }
+function formatDate(s) { try { return new Date(s).toLocaleString('fr-FR'); } catch { return s; } }

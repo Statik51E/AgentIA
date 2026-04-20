@@ -5,6 +5,7 @@ import Finances from './pages/Finances.jsx';
 import Projets from './pages/Projets.jsx';
 import Idees from './pages/Idees.jsx';
 import IA from './pages/IA.jsx';
+import Settings from './pages/Settings.jsx';
 import Login from './pages/Login.jsx';
 import { useAuth } from './lib/auth.jsx';
 
@@ -31,6 +32,7 @@ export default function App() {
           <Route path="/projets"  element={<Projets />} />
           <Route path="/idees"    element={<Idees />} />
           <Route path="/ia"       element={<IA />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
     </div>

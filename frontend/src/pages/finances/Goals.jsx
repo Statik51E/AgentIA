@@ -14,7 +14,7 @@ export default function Goals({ goals, accounts, onChanged }) {
       cible,
       actuel: parseFloat(form.actuel) || 0,
       deadline: form.deadline || null,
-      account_id: form.account_id ? Number(form.account_id) : null,
+      account_id: form.account_id || null,
     });
     setForm({ nom: '', cible: '', actuel: '', deadline: '', account_id: '' });
     onChanged?.();

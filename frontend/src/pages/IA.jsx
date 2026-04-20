@@ -145,4 +145,4 @@ function Tab({ k, label, tab, setTab }) {
   );
 }
 
-function formatDate(s) { try { return new Date(s.replace(' ', 'T') + 'Z').toLocaleString('fr-FR'); } catch { return s; } }
+function formatDate(s) { try { return new Date(s).toLocaleString('fr-FR'); } catch { return s; } }

@@ -7,6 +7,7 @@ const items = [
   { to: '/projets',  label: 'Projets' },
   { to: '/idees',    label: 'Idées' },
   { to: '/ia',       label: 'CORE IA' },
+  { to: '/settings', label: 'Paramètres' },
 ];
 
 export default function Sidebar() {

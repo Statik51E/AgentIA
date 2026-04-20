@@ -38,8 +38,8 @@ export default function Accounts({ accounts, onChanged }) {
     if (transfer.from_id === transfer.to_id) { setErr('Les comptes doivent être différents'); return; }
     try {
       await api.finances.transfer({
-        from_id: Number(transfer.from_id),
-        to_id: Number(transfer.to_id),
+        from_id: transfer.from_id,
+        to_id: transfer.to_id,
         montant: m,
         note: transfer.note || null,
       });

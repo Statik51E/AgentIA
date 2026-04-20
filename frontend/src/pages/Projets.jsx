@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import TopBar from '../components/TopBar.jsx';
+import MindMap from '../components/MindMap.jsx';
 
 const STATUTS = [
   { k: 'todo', label: 'À faire' },
@@ -12,8 +13,12 @@ export default function Projets() {
   const [projects, setProjects] = useState([]);
   const [form, setForm] = useState({ nom: '', description: '' });
   const [taskDrafts, setTaskDrafts] = useState({});
+  const [openMap, setOpenMap] = useState(null); // project id
+  const [brainstorming, setBrainstorming] = useState(null); // project id
+  const [bulkRunning, setBulkRunning] = useState(false);
+  const [err, setErr] = useState('');
 
-  const load = async () => setProjects(await api.projects.list());
+  const load = async () => { try { setProjects(await api.projects.list()); } catch (e) { setErr(e.message); } };
   useEffect(() => { load(); }, []);
 
   const add = async (e) => {
@@ -23,7 +28,7 @@ export default function Projets() {
     setForm({ nom: '', description: '' });
     load();
   };
-  const delProject = async (id) => { await api.projects.del(id); load(); };
+  const delProject = async (id) => { await api.projects.del(id); if (openMap === id) setOpenMap(null); load(); };
   const cycleStatus = async (p) => {
     const idx = STATUTS.findIndex(s => s.k === p.statut);
     const next = STATUTS[(idx + 1) % STATUTS.length].k;
@@ -42,70 +47,112 @@ export default function Projets() {
   };
   const delTask = async (pid, tid) => { await api.projects.delTask(pid, tid); load(); };
 
+  const brainstorm = async (pid) => {
+    setBrainstorming(pid); setErr('');
+    try {
+      await api.projects.brainstorm(pid);
+      await load();
+      setOpenMap(pid);
+    } catch (e) { setErr(e.message); }
+    finally { setBrainstorming(null); }
+  };
+
+  const brainstormAll = async () => {
+    const candidates = projects.filter(p => p.statut !== 'termine' && !p.mindmap);
+    if (!candidates.length) { setErr('Aucun projet sans carte mentale.'); return; }
+    setBulkRunning(true); setErr('');
+    try {
+      for (const p of candidates) {
+        try { await api.projects.brainstorm(p.id); } catch (e) { console.warn('[brainstorm]', p.nom, e.message); }
+      }
+      await load();
+    } finally { setBulkRunning(false); }
+  };
+
   return (
     <>
-      <TopBar title="Projets" sub="Priorisation automatique & tâches" />
+      <TopBar
+        title="Projets"
+        sub="Priorisation auto · tâches · cartes mentales IA"
+        right={
+          <button className="btn ghost small" onClick={brainstormAll} disabled={bulkRunning}>
+            {bulkRunning ? 'IA brainstorm…' : '🧠 Brainstorm IA sur tous'}
+          </button>
+        }
+      />
 
       <div className="card" style={{ marginBottom: 18 }}>
         <h3>Nouveau projet</h3>
         <form className="form" onSubmit={add} style={{ marginTop: 10 }}>
           <input className="input" placeholder="Nom du projet" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
-          <textarea className="textarea" placeholder="Description (optionnel — aide la priorisation IA)"
+          <textarea className="textarea" placeholder="Description (optionnel — aide la priorisation et le brainstorm IA)"
                     value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
           <button className="btn" type="submit">Créer</button>
         </form>
       </div>
 
+      {err && <div className="empty" style={{ color: 'var(--err)', marginBottom: 10 }}>Erreur : {err}</div>}
       {projects.length === 0 && <div className="empty">Aucun projet. Crée le premier.</div>}
 
       <div className="list">
-        {projects.map(p => (
-          <div key={p.id} className="card fade-in">
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
-                  <span className={`badge ${p.statut === 'termine' ? 'ok' : p.statut === 'en_cours' ? 'acc' : 'warn'}`}>
-                    {STATUTS.find(s => s.k === p.statut)?.label}
-                  </span>
-                  <span className="badge">prio {p.priorite}</span>
-                  <strong style={{ fontSize: 16 }}>{p.nom}</strong>
-                </div>
-                {p.description && <div className="meta" style={{ marginTop: 6 }}>{p.description}</div>}
-              </div>
-              <div style={{ display: 'flex', gap: 6 }}>
-                <button className="btn ghost small" onClick={() => cycleStatus(p)}>→ statut</button>
-                <button className="btn ghost small" onClick={() => delProject(p.id)}>Suppr.</button>
-              </div>
-            </div>
-
-            <div style={{ marginTop: 12 }}>
-              <div className="list">
-                {(p.tasks || []).map(t => (
-                  <div key={t.id} className="row">
-                    <div>
-                      <span className={`badge ${t.statut === 'termine' ? 'ok' : t.statut === 'en_cours' ? 'acc' : ''}`}>{t.statut}</span>{' '}
-                      <span className="title">{t.titre}</span>
-                    </div>
-                    <div style={{ display: 'flex', gap: 6 }}>
-                      <button className="btn ghost small" onClick={() => toggleTask(p.id, t)}>→</button>
-                      <button className="btn ghost small" onClick={() => delTask(p.id, t.id)}>×</button>
-                    </div>
+        {projects.map(p => {
+          const mapOpen = openMap === p.id;
+          const isBrainstorming = brainstorming === p.id;
+          return (
+            <div key={p.id} className="card fade-in">
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
+                <div style={{ flex: 1, minWidth: 220 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+                    <span className={`badge ${p.statut === 'termine' ? 'ok' : p.statut === 'en_cours' ? 'acc' : 'warn'}`}>
+                      {STATUTS.find(s => s.k === p.statut)?.label}
+                    </span>
+                    <span className="badge">prio {p.priorite}</span>
+                    {p.mindmap && <span className="badge acc">🧠 mindmap</span>}
+                    <strong style={{ fontSize: 16 }}>{p.nom}</strong>
                   </div>
-                ))}
+                  {p.description && <div className="meta" style={{ marginTop: 6 }}>{p.description}</div>}
+                </div>
+                <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                  <button className="btn ghost small" onClick={() => setOpenMap(mapOpen ? null : p.id)}>
+                    {mapOpen ? '▲ Fermer' : '🧠 Carte mentale'}
+                  </button>
+                  <button className="btn ghost small" onClick={() => cycleStatus(p)}>→ statut</button>
+                  <button className="btn ghost small" onClick={() => delProject(p.id)}>Suppr.</button>
+                </div>
               </div>
-              <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
-                <input
-                  className="input"
-                  placeholder="Nouvelle tâche…"
-                  value={taskDrafts[p.id] || ''}
-                  onChange={e => setTaskDrafts({ ...taskDrafts, [p.id]: e.target.value })}
-                  onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTask(p.id); } }}
-                />
-                <button className="btn small" onClick={() => addTask(p.id)}>Ajouter</button>
+
+              {mapOpen && (
+                <div style={{ marginTop: 14 }}>
+                  <MindMap mindmap={p.mindmap} loading={isBrainstorming} onRefresh={() => brainstorm(p.id)} />
+                </div>
+              )}
+
+              <div style={{ marginTop: 12 }}>
+                <div className="list">
+                  {(p.tasks || []).map(t => (
+                    <div key={t.id} className="row">
+                      <div>
+                        <span className={`badge ${t.statut === 'termine' ? 'ok' : t.statut === 'en_cours' ? 'acc' : ''}`}>{t.statut}</span>{' '}
+                        <span className="title">{t.titre}</span>
+                      </div>
+                      <div style={{ display: 'flex', gap: 6 }}>
+                        <button className="btn ghost small" onClick={() => toggleTask(p.id, t)}>→</button>
+                        <button className="btn ghost small" onClick={() => delTask(p.id, t.id)}>×</button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10 }}>
+                  <input className="input" placeholder="Nouvelle tâche…"
+                         value={taskDrafts[p.id] || ''}
+                         onChange={e => setTaskDrafts({ ...taskDrafts, [p.id]: e.target.value })}
+                         onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); addTask(p.id); } }} />
+                  <button className="btn small" onClick={() => addTask(p.id)}>Ajouter</button>
+                </div>
               </div>
             </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
     </>
   );
