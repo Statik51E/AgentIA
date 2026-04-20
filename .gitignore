@@ -1,0 +1,16 @@
+node_modules/
+dist/
+.vite/
+.DS_Store
+
+# backend
+backend/.env
+backend/data/
+
+# frontend
+frontend/dev-dist/
+
+# logs & os
+*.log
+npm-debug.log*
+Thumbs.db
