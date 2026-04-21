@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 const CAT_COLORS = {
   objectif:    '#4ade80',
@@ -12,8 +12,25 @@ const CAT_COLORS = {
 const BASE_W = 900;
 const BASE_H = 600;
 
+// Colors resolved from theme.css :root — used to inline CSS vars for export.
+const EXPORT_COLORS = {
+  'var(--bg)':        '#0a0a0c',
+  'var(--bg-1)':      '#101014',
+  'var(--bg-2)':      '#15151b',
+  'var(--bg-3)':      '#1c1c24',
+  'var(--line)':      '#232330',
+  'var(--line-soft)': '#1a1a22',
+  'var(--txt)':       '#ececf1',
+  'var(--txt-dim)':   '#a0a0ab',
+  'var(--txt-soft)':  '#6c6c78',
+  'var(--accent)':    '#7c5cff',
+};
+
 export default function MindMap({ mindmap, onRefresh, loading }) {
   const [fullscreen, setFullscreen] = useState(false);
+  const [downloading, setDownloading] = useState('');
+  const inlineSvgRef = useRef(null);
+  const fsSvgRef = useRef(null);
 
   useEffect(() => {
     if (!fullscreen) return;
@@ -27,6 +44,36 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
     };
   }, [fullscreen]);
 
+  const fileBase = slugify(mindmap?.racine || 'carte-mentale');
+
+  const pickSvg = () => fsSvgRef.current || inlineSvgRef.current;
+
+  const downloadSvg = () => {
+    const svg = pickSvg();
+    if (!svg) return;
+    setDownloading('svg');
+    try {
+      const source = serializeSvg(svg);
+      triggerDownload(
+        new Blob([source], { type: 'image/svg+xml;charset=utf-8' }),
+        `${fileBase}.svg`,
+      );
+    } finally { setDownloading(''); }
+  };
+
+  const downloadPng = async () => {
+    const svg = pickSvg();
+    if (!svg) return;
+    setDownloading('png');
+    try {
+      const source = serializeSvg(svg);
+      const blob = await svgToPng(source, BASE_W * 2, BASE_H * 2);
+      triggerDownload(blob, `${fileBase}.png`);
+    } catch (e) {
+      alert('Échec du téléchargement PNG : ' + e.message);
+    } finally { setDownloading(''); }
+  };
+
   if (!mindmap) {
     return (
       <div className="card" style={{ textAlign: 'center', padding: 30 }}>
@@ -39,6 +86,17 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
       </div>
     );
   }
+
+  const downloadButtons = (
+    <>
+      <button className="btn ghost small" onClick={downloadPng} disabled={!!downloading} title="Télécharger PNG">
+        {downloading === 'png' ? '…' : '⬇ PNG'}
+      </button>
+      <button className="btn ghost small" onClick={downloadSvg} disabled={!!downloading} title="Télécharger SVG vectoriel">
+        {downloading === 'svg' ? '…' : '⬇ SVG'}
+      </button>
+    </>
+  );
 
   return (
     <>
@@ -57,13 +115,14 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
             <button className="btn ghost small" onClick={() => setFullscreen(true)} title="Afficher en plein écran">
               ⛶ Plein écran
             </button>
+            {downloadButtons}
             <button className="btn ghost small" onClick={onRefresh} disabled={loading}>
               {loading ? 'Régénération…' : '🔄 Regénérer'}
             </button>
           </div>
         </div>
 
-        <MindMapSvg mindmap={mindmap} wrapperStyle={inlineWrapper} />
+        <MindMapSvg mindmap={mindmap} wrapperStyle={inlineWrapper} svgRef={inlineSvgRef} />
 
         <Legend />
       </div>
@@ -87,7 +146,8 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
                   </div>
                 )}
               </div>
-              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
+                {downloadButtons}
                 <button className="btn ghost small" onClick={onRefresh} disabled={loading}>
                   {loading ? 'Régénération…' : '🔄 Regénérer'}
                 </button>
@@ -98,6 +158,7 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
               <MindMapSvg
                 mindmap={mindmap}
                 wrapperStyle={{ width: '100%', height: '100%', overflow: 'auto', background: 'var(--bg-2)' }}
+                svgRef={fsSvgRef}
                 fit
               />
             </div>
@@ -134,7 +195,7 @@ function Legend({ inline = false }) {
   );
 }
 
-function MindMapSvg({ mindmap, wrapperStyle, fit = false }) {
+function MindMapSvg({ mindmap, wrapperStyle, svgRef, fit = false }) {
   const [hover, setHover] = useState(null);
   const cx = BASE_W / 2, cy = BASE_H / 2;
   const layout = useMemo(() => buildLayout(mindmap, cx, cy), [mindmap, cx, cy]);
@@ -142,6 +203,7 @@ function MindMapSvg({ mindmap, wrapperStyle, fit = false }) {
   return (
     <div style={wrapperStyle}>
       <svg
+        ref={svgRef}
         viewBox={`0 0 ${BASE_W} ${BASE_H}`}
         width="100%"
         height="100%"
@@ -256,4 +318,70 @@ function curvePath(x1, y1, x2, y2) {
 function truncate(s, n) {
   if (!s) return '';
   return s.length > n ? s.slice(0, n - 1) + '…' : s;
+}
+
+// -------------------------------------------------------------------
+// Export helpers (SVG + PNG)
+// -------------------------------------------------------------------
+function serializeSvg(svgEl) {
+  const clone = svgEl.cloneNode(true);
+  clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+  clone.setAttribute('xmlns:xlink', 'http://www.w3.org/1999/xlink');
+  clone.setAttribute('width', String(BASE_W));
+  clone.setAttribute('height', String(BASE_H));
+
+  // Background rect for standalone files (dark theme bg)
+  const bg = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  bg.setAttribute('x', '0'); bg.setAttribute('y', '0');
+  bg.setAttribute('width', String(BASE_W));
+  bg.setAttribute('height', String(BASE_H));
+  bg.setAttribute('fill', EXPORT_COLORS['var(--bg)']);
+  clone.insertBefore(bg, clone.firstChild);
+
+  let source = new XMLSerializer().serializeToString(clone);
+  for (const [k, v] of Object.entries(EXPORT_COLORS)) {
+    source = source.split(k).join(v);
+  }
+  return '<?xml version="1.0" encoding="UTF-8"?>\n' + source;
+}
+
+async function svgToPng(svgSource, width, height) {
+  const blob = new Blob([svgSource], { type: 'image/svg+xml;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  try {
+    const img = new Image();
+    await new Promise((resolve, reject) => {
+      img.onload = resolve;
+      img.onerror = () => reject(new Error('Image SVG illisible'));
+      img.src = url;
+    });
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const ctx = canvas.getContext('2d');
+    ctx.fillStyle = EXPORT_COLORS['var(--bg)'];
+    ctx.fillRect(0, 0, width, height);
+    ctx.drawImage(img, 0, 0, width, height);
+    return await new Promise((resolve, reject) => {
+      canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas toBlob a échoué')), 'image/png');
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
+function triggerDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click();
+  setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+}
+
+function slugify(s) {
+  return String(s || 'carte-mentale')
+    .toLowerCase()
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '') || 'carte-mentale';
 }

@@ -9,27 +9,54 @@ const TYPES = [
   { v: 'autre',   label: 'Autre',   color: '#a0a0ab' },
 ];
 
+const EMPTY_FORM = { nom: '', type: 'courant', solde_initial: '' };
+
 export default function Accounts({ accounts, onChanged }) {
-  const [form, setForm] = useState({ nom: '', type: 'courant', solde_initial: '' });
+  const [form, setForm] = useState(EMPTY_FORM);
+  const [editing, setEditing] = useState(null); // account id or null
   const [transfer, setTransfer] = useState({ from_id: '', to_id: '', montant: '', note: '' });
   const [err, setErr] = useState('');
 
-  const add = async (e) => {
+  const submit = async (e) => {
     e.preventDefault();
     if (!form.nom.trim()) return;
-    await api.finances.addAccount({
+    const payload = {
       nom: form.nom.trim(),
       type: form.type,
       solde_initial: parseFloat(form.solde_initial) || 0,
+    };
+    try {
+      if (editing) await api.finances.patchAccount(editing, payload);
+      else await api.finances.addAccount(payload);
+      setForm(EMPTY_FORM);
+      setEditing(null);
+      onChanged?.();
+    } catch (ex) { setErr(ex.message); }
+  };
+
+  const startEdit = (a) => {
+    setEditing(a.id);
+    setForm({
+      nom: a.nom || '',
+      type: a.type || 'courant',
+      solde_initial: a.solde_initial != null ? String(a.solde_initial) : '',
     });
-    setForm({ nom: '', type: 'courant', solde_initial: '' });
-    onChanged?.();
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
+
+  const cancelEdit = () => {
+    setEditing(null);
+    setForm(EMPTY_FORM);
+    setErr('');
+  };
+
   const del = async (id) => {
-    if (!confirm('Supprimer ce compte ? Les transactions seront détachées.')) return;
+    if (!confirm('Supprimer ce compte ? Les transactions seront détachées (pas supprimées).')) return;
     await api.finances.delAccount(id);
+    if (editing === id) cancelEdit();
     onChanged?.();
   };
+
   const doTransfer = async (e) => {
     e.preventDefault();
     setErr('');
@@ -59,8 +86,16 @@ export default function Accounts({ accounts, onChanged }) {
           <div className="delta">Sur {accounts.length} compte{accounts.length > 1 ? 's' : ''}</div>
         </div>
         <div className="card">
-          <h3>Nouveau compte</h3>
-          <form className="form" onSubmit={add}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 6 }}>
+            <h3 style={{ margin: 0 }}>{editing ? 'Modifier le compte' : 'Nouveau compte'}</h3>
+            {editing && <button type="button" className="btn ghost small" onClick={cancelEdit}>Annuler</button>}
+          </div>
+          {editing && (
+            <div className="meta" style={{ color: 'var(--txt-soft)', fontSize: 12, marginBottom: 8 }}>
+              Les transactions existantes restent rattachées — elles ne sont pas recalculées.
+            </div>
+          )}
+          <form className="form" onSubmit={submit}>
             <input className="input" placeholder="Nom (Boursorama, Livret A…)"
                    value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
             <div className="row2">
@@ -70,7 +105,8 @@ export default function Accounts({ accounts, onChanged }) {
               <input className="input" type="number" step="0.01" placeholder="Solde initial (€)"
                      value={form.solde_initial} onChange={e => setForm({ ...form, solde_initial: e.target.value })} />
             </div>
-            <button className="btn" type="submit">Créer</button>
+            <button className="btn" type="submit">{editing ? 'Enregistrer' : 'Créer'}</button>
+            {err && <div style={{ color: 'var(--err)', fontSize: 13 }}>{err}</div>}
           </form>
         </div>
       </div>
@@ -83,20 +119,23 @@ export default function Accounts({ accounts, onChanged }) {
           <div className="list">
             {accounts.map(a => {
               const meta = TYPES.find(t => t.v === a.type) || TYPES[0];
+              const isEditing = editing === a.id;
               return (
-                <div key={a.id} className="row">
+                <div key={a.id} className="row" style={isEditing ? { borderColor: 'var(--accent)' } : undefined}>
                   <div>
                     <div className="title">
                       <span style={{ display: 'inline-block', width: 8, height: 8, background: meta.color, borderRadius: 4, marginRight: 8 }} />
                       {a.nom} <span className="badge" style={{ marginLeft: 6 }}>{meta.label}</span>
+                      {isEditing && <span className="badge acc" style={{ marginLeft: 6 }}>en édition</span>}
                     </div>
                     <div className="meta">
                       Solde initial : {fmt(a.solde_initial)} € · Entrées : +{fmt(a.entrees)} € · Sorties : -{fmt(a.sorties)} €
                     </div>
                   </div>
-                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                  <div style={{ display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
                     <strong style={{ fontSize: 16, color: a.solde >= 0 ? 'var(--ok)' : 'var(--err)' }}>{fmt(a.solde)} €</strong>
-                    <button className="btn ghost small" onClick={() => del(a.id)}>✕</button>
+                    <button type="button" className="btn ghost small" onClick={() => startEdit(a)}>Modifier</button>
+                    <button type="button" className="btn ghost small" onClick={() => del(a.id)}>Supprimer</button>
                   </div>
                 </div>
               );
