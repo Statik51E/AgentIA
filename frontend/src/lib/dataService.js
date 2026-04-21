@@ -1,6 +1,7 @@
 import {
   collection, doc, getDoc, getDocs, addDoc, setDoc, updateDoc, deleteDoc,
   query, where, orderBy, limit as qLimit, serverTimestamp, writeBatch,
+  onSnapshot,
 } from 'firebase/firestore';
 import { db } from './firestore.js';
 import { auth } from './firebase.js';
@@ -17,6 +18,36 @@ function userDoc(name, id) { return doc(db, 'users', uid(), name, String(id)); }
 function nowIso() { return new Date().toISOString(); }
 function snapDoc(s) { return { id: s.id, ...s.data() }; }
 function snapAll(s) { return s.docs.map(snapDoc); }
+
+// ---------------------------------------------------------------------
+// REAL-TIME SUBSCRIPTIONS — onSnapshot listeners
+// ---------------------------------------------------------------------
+/**
+ * Écoute une collection utilisateur en temps réel.
+ * Appelle `onChange()` à chaque ajout / modification / suppression.
+ * Renvoie une fonction `unsubscribe()`.
+ */
+export function subscribeCollection(name, onChange) {
+  try {
+    return onSnapshot(userCol(name), () => { try { onChange?.(); } catch {} }, () => {});
+  } catch {
+    return () => {};
+  }
+}
+
+/**
+ * Écoute plusieurs collections en même temps.
+ * `onChange` est débounced pour éviter un burst d'updates.
+ */
+export function subscribeCollections(names, onChange, { debounceMs = 120 } = {}) {
+  let timer = null;
+  const fire = () => {
+    clearTimeout(timer);
+    timer = setTimeout(() => onChange?.(), debounceMs);
+  };
+  const unsubs = names.map(n => subscribeCollection(n, fire));
+  return () => { clearTimeout(timer); unsubs.forEach(u => { try { u(); } catch {} }); };
+}
 
 // ---------------------------------------------------------------------
 // USER SETTINGS (Groq API key, preferences)

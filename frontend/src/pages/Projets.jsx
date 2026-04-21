@@ -23,6 +23,10 @@ export default function Projets() {
 
   const load = async () => { try { setProjects(await api.projects.list()); } catch (e) { setErr(e.message); } };
   useEffect(() => { load(); }, []);
+  useEffect(() => {
+    const unsub = api.realtime.subscribe(['projects', 'ideas'], () => { load(); });
+    return () => { try { unsub?.(); } catch {} };
+  }, []);
 
   const add = async (e) => {
     e.preventDefault();

@@ -59,6 +59,14 @@ export default function Finances() {
   };
   useEffect(() => { load(); loadAdvice(); /* eslint-disable-next-line */ }, []);
   useEffect(() => { if (stats !== null) load(); /* eslint-disable-next-line */ }, [month]);
+  useEffect(() => {
+    const unsub = api.realtime.subscribe(
+      ['finances', 'fixed_expenses', 'budgets', 'accounts', 'goals'],
+      () => { load(); },
+    );
+    return () => { try { unsub?.(); } catch {} };
+    /* eslint-disable-next-line */
+  }, [month]);
 
   const addBudget = async (e) => {
     e.preventDefault();

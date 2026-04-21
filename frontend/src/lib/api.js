@@ -148,7 +148,72 @@ export const api = {
     get: () => data.getSettings(),
     save: (patch) => data.saveSettings(patch),
   },
+
+  realtime: {
+    subscribe: (names, onChange, opts) => data.subscribeCollections(names, onChange, opts),
+  },
+
+  context: {
+    snapshot: (kind) => buildContextSnapshot(kind),
+  },
 };
+
+async function buildContextSnapshot(kind = 'finance') {
+  try {
+    if (kind === 'finance') {
+      const [stats, summary, fixed, accounts, goals, history] = await Promise.all([
+        monthlyStats(),
+        data.financesSummary(),
+        data.listFixed(),
+        data.listAccounts(),
+        data.listGoals(),
+        monthlyHistory(3),
+      ]);
+      return {
+        kind: 'finance',
+        mois: stats.mois,
+        jour: `${stats.jour}/${stats.joursDansMois}`,
+        revenuMois: stats.revenuMois,
+        depenseMois: stats.depenseMois,
+        projectionMois: stats.projectionMois,
+        chargesFixes: stats.chargesFixes,
+        budgetDisponible: stats.budgetDisponible,
+        soldeGlobal: summary.solde,
+        soldeApresChargesFixes: summary.solde_apres_charges,
+        depassements: stats.depassements,
+        alertes: stats.alertes,
+        anomalies: summary.anomalies,
+        top_categories: (stats.totauxParCategorie || []).slice(0, 8),
+        charges_fixes: fixed.filter(f => f.actif !== false).slice(0, 30).map(f => ({
+          libelle: f.libelle, montant: f.montant, categorie: f.categorie, jour_mois: f.jour_mois,
+        })),
+        comptes: accounts.slice(0, 10).map(a => ({ nom: a.nom, type: a.type, solde: a.solde })),
+        objectifs: goals.slice(0, 10).map(g => ({ nom: g.nom, cible: g.cible, actuel: g.actuel, deadline: g.deadline })),
+        historique_3_mois: history,
+      };
+    }
+    if (kind === 'project') {
+      const [projects, ideas] = await Promise.all([data.listProjects(), data.listIdeas()]);
+      return {
+        kind: 'project',
+        projets: projects.slice(0, 30).map(p => ({
+          id: p.id, nom: p.nom, statut: p.statut, priorite: p.priorite,
+          description: (p.description || '').slice(0, 200),
+          taches: (p.tasks || []).slice(0, 20).map(t => ({ titre: t.titre, statut: t.statut })),
+          mindmap_resume: p.mindmap?.resume || null,
+          has_brief: Boolean(p.brief?.markdown),
+        })),
+        idees_count: ideas.length,
+        idees_recentes: ideas.slice(0, 10).map(i => ({
+          contenu: (i.contenu || '').slice(0, 160), tags: i.tags || [],
+        })),
+      };
+    }
+    return { kind };
+  } catch (e) {
+    return { kind, error: e.message };
+  }
+}
 
 function csvCell(s) {
   if (s == null) return '';

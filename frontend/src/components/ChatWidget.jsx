@@ -60,7 +60,17 @@ export default function ChatWidget({ expertise = 'finance' }) {
     setInput('');
     setLoading(true); setErr('');
     try {
-      const reply = await api.ai.chat({ system: config.system, messages: next });
+      let systemWithContext = config.system;
+      try {
+        const ctx = await api.context.snapshot(expertise);
+        if (ctx && !ctx.error) {
+          systemWithContext = `${config.system}
+
+Contexte temps-réel de l'utilisateur (données actuelles de son compte, à utiliser pour répondre précisément — n'invente rien au-delà) :
+${JSON.stringify(ctx, null, 2)}`;
+        }
+      } catch {}
+      const reply = await api.ai.chat({ system: systemWithContext, messages: next });
       setMessages([...next, { role: 'assistant', content: reply || '…' }]);
     } catch (ex) {
       setErr(ex.message);
