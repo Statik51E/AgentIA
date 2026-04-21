@@ -3,30 +3,95 @@ import { getSettings } from './dataService.js';
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 const GROQ_URL = 'https://api.groq.com/openai/v1/chat/completions';
 
-async function groqKey() {
+// Round-robin cursor + per-key cooldown (rate-limit / auth fail recovery)
+const keyState = new Map(); // key -> { cooldownUntil: epoch_ms }
+let rrCursor = 0;
+
+function collectKeys(s) {
+  const raw = [];
+  if (Array.isArray(s?.groqApiKeys)) raw.push(...s.groqApiKeys);
+  if (typeof s?.groqApiKey === 'string') raw.push(s.groqApiKey);
+  const seen = new Set();
+  const keys = [];
+  for (const k of raw) {
+    const v = typeof k === 'string' ? k.trim() : '';
+    if (v && !seen.has(v)) { seen.add(v); keys.push(v); }
+  }
+  return keys;
+}
+
+async function groqContext() {
   const s = await getSettings();
-  const k = s?.groqApiKey;
-  if (!k) throw new Error('Ajoute ta clé API Groq dans les Paramètres pour utiliser l\'IA.');
-  return { key: k, model: s?.groqModel || DEFAULT_MODEL };
+  const keys = collectKeys(s);
+  if (keys.length === 0) throw new Error('Ajoute au moins une clé API Groq dans les Paramètres pour utiliser l\'IA.');
+  return { keys, model: s?.groqModel || DEFAULT_MODEL };
+}
+
+function pickAvailable(keys) {
+  const now = Date.now();
+  const live = keys.filter(k => !(keyState.get(k)?.cooldownUntil > now));
+  const pool = live.length ? live : keys; // if all in cooldown, retry anyway
+  const start = rrCursor % pool.length;
+  rrCursor = (start + 1) % pool.length;
+  // Order: start → end → wrap
+  return [...pool.slice(start), ...pool.slice(0, start)];
+}
+
+function markCooldown(key, ms) {
+  keyState.set(key, { cooldownUntil: Date.now() + ms });
 }
 
 async function callGroq(messages, { json = true } = {}) {
-  const { key, model } = await groqKey();
+  const { keys, model } = await groqContext();
+  const order = pickAvailable(keys);
+  let lastErr = null;
+
+  for (const key of order) {
+    try {
+      const r = await fetch(GROQ_URL, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json', 'authorization': `Bearer ${key}` },
+        body: JSON.stringify({
+          model,
+          ...(json ? { response_format: { type: 'json_object' } } : {}),
+          messages,
+        }),
+      });
+      if (r.ok) {
+        const data = await r.json();
+        return data.choices?.[0]?.message?.content || '';
+      }
+      const txt = await r.text();
+      // 429 / 5xx → rate limit or transient, try next key; 401/403 → bad key, quarantine
+      if (r.status === 429)              markCooldown(key, 60_000);
+      else if (r.status >= 500)          markCooldown(key, 15_000);
+      else if (r.status === 401 || r.status === 403) markCooldown(key, 10 * 60_000);
+      lastErr = new Error(`Groq ${r.status}: ${txt.slice(0, 200)}`);
+      // 400-level (other than auth/429) → bail, pas la peine d'essayer les autres
+      if (r.status >= 400 && r.status < 500 && r.status !== 429 && r.status !== 401 && r.status !== 403) {
+        throw lastErr;
+      }
+    } catch (e) {
+      lastErr = e;
+      markCooldown(key, 30_000);
+    }
+  }
+  throw lastErr || new Error('Aucune clé Groq disponible.');
+}
+
+export async function testGroqKey(key, model = DEFAULT_MODEL) {
   const r = await fetch(GROQ_URL, {
     method: 'POST',
     headers: { 'content-type': 'application/json', 'authorization': `Bearer ${key}` },
     body: JSON.stringify({
       model,
-      ...(json ? { response_format: { type: 'json_object' } } : {}),
-      messages,
+      messages: [{ role: 'user', content: 'ping' }],
+      max_tokens: 2,
     }),
   });
-  if (!r.ok) {
-    const txt = await r.text();
-    throw new Error(`Groq ${r.status}: ${txt.slice(0, 200)}`);
-  }
-  const data = await r.json();
-  return data.choices?.[0]?.message?.content || '';
+  if (r.ok) return { ok: true };
+  const txt = await r.text();
+  return { ok: false, status: r.status, message: txt.slice(0, 160) };
 }
 
 function safeJson(s, fallback = {}) {
@@ -210,6 +275,188 @@ function fallbackVerdict(stats) {
   if (!stats) return '';
   const s = stats.budgetDisponible >= 0 ? 'équilibré' : 'déficitaire';
   return `Mois ${s}. ${stats.depenseMois}€ dépensés sur ${stats.revenuMois}€ de revenus.`;
+}
+
+// ---------------------------------------------------------------------
+// OVERDRAFT RECOVERY PLAN — solde négatif → plan d'action
+// ---------------------------------------------------------------------
+const OVERDRAFT_SYSTEM = `Tu es CORE IA, conseiller financier personnel très concret.
+L'utilisateur est en découvert ou risque d'y être. Tu reçois son état financier détaillé (revenus, dépenses par catégorie, charges fixes, anomalies, historique).
+Tu dois produire un plan de redressement solide, réaliste, étape par étape, ordonné du plus urgent au plus structurel.
+
+Réponds STRICTEMENT en JSON :
+{
+  "diagnostic": "2-3 phrases : pourquoi le découvert, causes principales",
+  "urgence": "critique"|"elevee"|"moderee",
+  "economie_mensuelle_cible": number,
+  "etapes": [
+    {
+      "ordre": 1,
+      "titre": "action courte (<= 60 car)",
+      "pourquoi": "impact attendu (1 phrase)",
+      "economie_estimee": number,
+      "delai": "immediat"|"1_semaine"|"1_mois"|"3_mois",
+      "categorie": "dépense concernée ou 'global'",
+      "effort": "faible"|"moyen"|"eleve"
+    }
+  ],
+  "optimisations_long_terme": ["action structurelle 1", "action structurelle 2"],
+  "risques": ["risque 1 à surveiller"]
+}
+
+Règles :
+- 4 à 8 étapes, ordonnées logiquement.
+- Vise des économies chiffrées réalistes basées SUR les données reçues (pas de deviner).
+- Priorise : couper les abonnements inutiles, renégocier crédit/assurance/télécom, réduire les catégories en anomalie, étaler les gros paiements.
+- Ne propose PAS de solutions magiques (prêt familial, crypto, gains hypothétiques).
+- Français, ton direct, phrases courtes.`;
+
+export async function generateOverdraftPlan(data) {
+  try {
+    const content = await callGroq([
+      { role: 'system', content: OVERDRAFT_SYSTEM },
+      { role: 'user', content: JSON.stringify(data).slice(0, 12_000) },
+    ]);
+    const parsed = safeJson(content);
+    const URGENCES = ['critique', 'elevee', 'moderee'];
+    const DELAIS = ['immediat', '1_semaine', '1_mois', '3_mois'];
+    const EFFORTS = ['faible', 'moyen', 'eleve'];
+    return {
+      diagnostic: String(parsed.diagnostic || '').slice(0, 400),
+      urgence: URGENCES.includes(parsed.urgence) ? parsed.urgence : 'moderee',
+      economie_mensuelle_cible: Math.max(0, Number(parsed.economie_mensuelle_cible) || 0),
+      etapes: Array.isArray(parsed.etapes) ? parsed.etapes.slice(0, 10).map((e, i) => ({
+        ordre: Number.isInteger(e?.ordre) ? e.ordre : i + 1,
+        titre: String(e?.titre || '').slice(0, 80),
+        pourquoi: String(e?.pourquoi || '').slice(0, 240),
+        economie_estimee: Math.max(0, Number(e?.economie_estimee) || 0),
+        delai: DELAIS.includes(e?.delai) ? e.delai : '1_mois',
+        categorie: String(e?.categorie || 'global').slice(0, 40),
+        effort: EFFORTS.includes(e?.effort) ? e.effort : 'moyen',
+      })).filter(e => e.titre) : [],
+      optimisations_long_terme: Array.isArray(parsed.optimisations_long_terme)
+        ? parsed.optimisations_long_terme.slice(0, 6).map(s => String(s).slice(0, 160)).filter(Boolean)
+        : [],
+      risques: Array.isArray(parsed.risques)
+        ? parsed.risques.slice(0, 6).map(s => String(s).slice(0, 160)).filter(Boolean)
+        : [],
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    return { error: e.message, etapes: [], optimisations_long_terme: [], risques: [] };
+  }
+}
+
+// ---------------------------------------------------------------------
+// IDEA ORGANIZER — cluster / groupe / priorise
+// ---------------------------------------------------------------------
+const ORGANIZER_SYSTEM = `Tu es CORE IA, organisateur d'idées. Tu reçois une liste d'idées brutes (contenu + tags éventuels).
+Tu dois les regrouper par thème, détecter les doublons, les prioriser et proposer celles à convertir en projet.
+
+Réponds STRICTEMENT en JSON :
+{
+  "groupes": [
+    {
+      "theme": "nom du groupe (<= 50 car)",
+      "description": "phrase courte expliquant le thème",
+      "ideas_ids": ["id1", "id2"],
+      "priorite": 0-5,
+      "action_suggeree": "convertir en projet"|"fusionner"|"approfondir"|"archiver"|"garder"
+    }
+  ],
+  "doublons": [
+    { "ids": ["id1", "id2"], "raison": "pourquoi ce sont des doublons" }
+  ],
+  "a_convertir": [
+    { "id": "id1", "raison": "pourquoi cette idée mérite de devenir un projet maintenant" }
+  ],
+  "resume": "phrase de synthèse globale"
+}
+
+Règles :
+- Utilise UNIQUEMENT les IDs fournis.
+- Chaque idée peut être dans 0 ou 1 groupe (pas plusieurs).
+- Si < 3 idées, retourne 1 seul groupe avec "garder".
+- Français, concis.`;
+
+export async function organizeIdeas(ideas) {
+  if (!Array.isArray(ideas) || ideas.length === 0) {
+    return { groupes: [], doublons: [], a_convertir: [], resume: 'Aucune idée à organiser.' };
+  }
+  const payload = ideas.slice(0, 60).map(i => ({
+    id: i.id,
+    contenu: String(i.contenu || '').slice(0, 400),
+    tags: Array.isArray(i.tags) ? i.tags.slice(0, 8) : [],
+  }));
+  try {
+    const content = await callGroq([
+      { role: 'system', content: ORGANIZER_SYSTEM },
+      { role: 'user', content: JSON.stringify(payload) },
+    ]);
+    const parsed = safeJson(content);
+    const validIds = new Set(payload.map(p => p.id));
+    const ACTIONS = ['convertir en projet', 'fusionner', 'approfondir', 'archiver', 'garder'];
+    return {
+      groupes: Array.isArray(parsed.groupes) ? parsed.groupes.slice(0, 12).map(g => ({
+        theme: String(g?.theme || '').slice(0, 60),
+        description: String(g?.description || '').slice(0, 240),
+        ideas_ids: Array.isArray(g?.ideas_ids) ? g.ideas_ids.filter(id => validIds.has(id)) : [],
+        priorite: clampInt(g?.priorite, 0, 5, 2),
+        action_suggeree: ACTIONS.includes(g?.action_suggeree) ? g.action_suggeree : 'garder',
+      })).filter(g => g.theme && g.ideas_ids.length > 0) : [],
+      doublons: Array.isArray(parsed.doublons) ? parsed.doublons.slice(0, 10).map(d => ({
+        ids: Array.isArray(d?.ids) ? d.ids.filter(id => validIds.has(id)) : [],
+        raison: String(d?.raison || '').slice(0, 200),
+      })).filter(d => d.ids.length >= 2) : [],
+      a_convertir: Array.isArray(parsed.a_convertir) ? parsed.a_convertir.slice(0, 10).map(a => ({
+        id: String(a?.id || ''),
+        raison: String(a?.raison || '').slice(0, 240),
+      })).filter(a => validIds.has(a.id)) : [],
+      resume: String(parsed.resume || '').slice(0, 300),
+      generatedAt: new Date().toISOString(),
+    };
+  } catch (e) {
+    return { error: e.message, groupes: [], doublons: [], a_convertir: [], resume: '' };
+  }
+}
+
+// ---------------------------------------------------------------------
+// PROJECT BRIEF — document markdown généré par l'IA pour un projet
+// ---------------------------------------------------------------------
+const BRIEF_SYSTEM = `Tu es CORE IA. Tu produis un brief projet complet au format markdown.
+Le document doit contenir, dans cet ordre :
+# <nom du projet>
+## Contexte
+## Objectifs (3-5 bullets mesurables)
+## Livrables (liste concrète)
+## Jalons (avec ordre logique, pas de dates inventées)
+## Risques & dépendances
+## Ressources nécessaires
+## Critères de succès
+## Prochaines actions immédiates (3-5)
+
+Règles :
+- Français, style direct, pas de remplissage.
+- N'invente PAS de dates, budgets, ou personnes.
+- Reste fidèle au nom, description et tâches fournis.
+- Réponds UNIQUEMENT avec le markdown brut (pas de balises code, pas de JSON).`;
+
+export async function generateProjectBrief(project) {
+  const payload = {
+    nom: project.nom,
+    description: project.description || '',
+    statut: project.statut,
+    priorite: project.priorite,
+    taches: (project.tasks || []).map(t => ({ titre: t.titre, statut: t.statut })),
+  };
+  const content = await callGroq([
+    { role: 'system', content: BRIEF_SYSTEM },
+    { role: 'user', content: JSON.stringify(payload) },
+  ], { json: false });
+  return {
+    markdown: String(content || '').trim(),
+    generatedAt: new Date().toISOString(),
+  };
 }
 
 // ---------------------------------------------------------------------

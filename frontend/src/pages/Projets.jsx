@@ -14,7 +14,9 @@ export default function Projets() {
   const [form, setForm] = useState({ nom: '', description: '' });
   const [taskDrafts, setTaskDrafts] = useState({});
   const [openMap, setOpenMap] = useState(null); // project id
+  const [openBrief, setOpenBrief] = useState(null); // project id
   const [brainstorming, setBrainstorming] = useState(null); // project id
+  const [briefing, setBriefing] = useState(null); // project id
   const [bulkRunning, setBulkRunning] = useState(false);
   const [err, setErr] = useState('');
 
@@ -57,6 +59,28 @@ export default function Projets() {
     finally { setBrainstorming(null); }
   };
 
+  const generateBrief = async (pid) => {
+    setBriefing(pid); setErr('');
+    try {
+      await api.ai.projectBrief(pid);
+      await load();
+      setOpenBrief(pid);
+    } catch (e) { setErr(e.message); }
+    finally { setBriefing(null); }
+  };
+
+  const downloadBrief = (p) => {
+    const md = p.brief?.markdown;
+    if (!md) return;
+    const slug = (p.nom || 'projet').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'projet';
+    const blob = new Blob([md], { type: 'text/markdown;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = `${slug}.md`;
+    document.body.appendChild(a); a.click();
+    setTimeout(() => { URL.revokeObjectURL(url); a.remove(); }, 100);
+  };
+
   const brainstormAll = async () => {
     const candidates = projects.filter(p => p.statut !== 'termine' && !p.mindmap);
     if (!candidates.length) { setErr('Aucun projet sans carte mentale.'); return; }
@@ -97,7 +121,9 @@ export default function Projets() {
       <div className="list">
         {projects.map(p => {
           const mapOpen = openMap === p.id;
+          const briefOpen = openBrief === p.id;
           const isBrainstorming = brainstorming === p.id;
+          const isBriefing = briefing === p.id;
           return (
             <div key={p.id} className="card fade-in">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
@@ -108,13 +134,17 @@ export default function Projets() {
                     </span>
                     <span className="badge">prio {p.priorite}</span>
                     {p.mindmap && <span className="badge acc">🧠 mindmap</span>}
+                    {p.brief && <span className="badge acc">📄 brief</span>}
                     <strong style={{ fontSize: 16 }}>{p.nom}</strong>
                   </div>
                   {p.description && <div className="meta" style={{ marginTop: 6 }}>{p.description}</div>}
                 </div>
                 <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
                   <button className="btn ghost small" onClick={() => setOpenMap(mapOpen ? null : p.id)}>
-                    {mapOpen ? '▲ Fermer' : '🧠 Carte mentale'}
+                    {mapOpen ? '▲ Mindmap' : '🧠 Carte mentale'}
+                  </button>
+                  <button className="btn ghost small" onClick={() => setOpenBrief(briefOpen ? null : p.id)}>
+                    {briefOpen ? '▲ Brief' : '📄 Brief IA'}
                   </button>
                   <button className="btn ghost small" onClick={() => cycleStatus(p)}>→ statut</button>
                   <button className="btn ghost small" onClick={() => delProject(p.id)}>Suppr.</button>
@@ -124,6 +154,17 @@ export default function Projets() {
               {mapOpen && (
                 <div style={{ marginTop: 14 }}>
                   <MindMap mindmap={p.mindmap} loading={isBrainstorming} onRefresh={() => brainstorm(p.id)} />
+                </div>
+              )}
+
+              {briefOpen && (
+                <div style={{ marginTop: 14 }}>
+                  <BriefPanel
+                    brief={p.brief}
+                    loading={isBriefing}
+                    onGenerate={() => generateBrief(p.id)}
+                    onDownload={() => downloadBrief(p)}
+                  />
                 </div>
               )}
 
@@ -155,5 +196,36 @@ export default function Projets() {
         })}
       </div>
     </>
+  );
+}
+
+function BriefPanel({ brief, loading, onGenerate, onDownload }) {
+  const has = brief?.markdown;
+  return (
+    <div style={{ border: '1px solid var(--line-soft)', borderRadius: 10, padding: 14, background: 'var(--bg-2)' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+        <div style={{ fontSize: 13, color: 'var(--txt-dim)' }}>
+          {has
+            ? `Brief généré ${brief.generatedAt ? 'le ' + new Date(brief.generatedAt).toLocaleString('fr-FR') : ''}`
+            : 'Aucun brief généré pour ce projet.'}
+        </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          <button className="btn ghost small" onClick={onGenerate} disabled={loading}>
+            {loading ? 'IA génère…' : has ? '↻ Régénérer' : '✨ Générer'}
+          </button>
+          {has && <button className="btn small" onClick={onDownload}>⬇ Télécharger .md</button>}
+        </div>
+      </div>
+      {has && (
+        <pre style={{
+          marginTop: 12,
+          whiteSpace: 'pre-wrap',
+          fontFamily: 'inherit',
+          fontSize: 13,
+          color: 'var(--txt)',
+          lineHeight: 1.55,
+        }}>{brief.markdown}</pre>
+      )}
+    </div>
   );
 }

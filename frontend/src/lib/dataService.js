@@ -357,6 +357,7 @@ export async function patchProject(id, data) {
   if (typeof data.statut === 'string') patch.statut = data.statut;
   if (typeof data.priorite === 'number') patch.priorite = data.priorite;
   if (data.mindmap !== undefined) patch.mindmap = data.mindmap;
+  if (data.brief !== undefined) patch.brief = data.brief;
   await updateDoc(userDoc('projects', id), patch);
   return snapDoc(await getDoc(userDoc('projects', id)));
 }
@@ -454,8 +455,9 @@ export async function convertIdea(id) {
 // AI ACTIONS / SUGGESTIONS
 // ---------------------------------------------------------------------
 export async function listSuggestions() {
-  const snap = await getDocs(query(userCol('ai_actions'), where('statut', '==', 'suggere'), orderBy('createdAt', 'desc')));
-  return snapAll(snap);
+  // Tri côté client pour éviter d'exiger un index composite (statut + createdAt)
+  const snap = await getDocs(query(userCol('ai_actions'), where('statut', '==', 'suggere')));
+  return snapAll(snap).sort((a, b) => String(b.createdAt || '').localeCompare(String(a.createdAt || '')));
 }
 
 export async function listActions() {

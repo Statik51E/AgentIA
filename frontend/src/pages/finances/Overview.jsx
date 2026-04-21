@@ -1,4 +1,5 @@
 import { StatCard } from '../../components/Card.jsx';
+import { PieChart } from '../../components/PieChart.jsx';
 
 const CATEGORIES_SUGGEREES = [
   'loisir','restaurant','courses','transport','carburant','abonnement','santé','shopping','voyage',
@@ -96,6 +97,19 @@ export default function Overview({ stats, summary, advice, loadingAdvice, onRelo
           })}
         </div>
       </div>
+
+      {(stats?.totauxParCategorie?.length || 0) > 0 && (
+        <div className="card" style={{ marginBottom: 16 }}>
+          <h3>Répartition des dépenses</h3>
+          <p style={{ margin: '4px 0 14px', color: 'var(--txt-soft)', fontSize: 13 }}>
+            Variable + charges fixes du mois, en %.
+          </p>
+          <PieChart
+            data={stats.totauxParCategorie.map(t => ({ label: t.categorie, value: t.total }))}
+            title={`${stats.totauxParCategorie.length} catégories`}
+          />
+        </div>
+      )}
 
       {(stats?.totauxParCategorie?.length || 0) > 0 && (
         <div className="card" style={{ marginBottom: 16 }}>

@@ -108,6 +108,28 @@ export const api = {
       const advice = await ai.generateFinanceAdvice(stats);
       return { stats, ...advice };
     },
+    overdraftPlan: async () => {
+      const [stats, summary, history] = await Promise.all([
+        monthlyStats(),
+        data.financesSummary(),
+        monthlyHistory(6),
+      ]);
+      const plan = await ai.generateOverdraftPlan({ stats, summary, history });
+      return { stats, summary, history, ...plan };
+    },
+    organizeIdeas: async () => {
+      const ideas = await data.listIdeas();
+      const res = await ai.organizeIdeas(ideas);
+      return { ...res, ideas };
+    },
+    projectBrief: async (projectId) => {
+      const projects = await data.listProjects();
+      const p = projects.find(x => x.id === projectId);
+      if (!p) throw new Error('projet introuvable');
+      const brief = await ai.generateProjectBrief(p);
+      await data.patchProject(projectId, { brief });
+      return brief;
+    },
   },
 
   suggestions: {
