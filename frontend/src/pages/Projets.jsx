@@ -176,7 +176,7 @@ export default function Projets() {
           return (
             <div key={p.id} className="card fade-in">
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap' }}>
-                <div style={{ flex: 1, minWidth: 220 }}>
+                <div style={{ flex: '1 1 220px', minWidth: 0 }}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                     <span className={`badge ${p.statut === 'termine' ? 'ok' : p.statut === 'en_cours' ? 'acc' : 'warn'}`}>
                       {STATUTS.find(s => s.k === p.statut)?.label}

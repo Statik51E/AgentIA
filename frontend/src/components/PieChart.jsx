@@ -51,7 +51,7 @@ export function PieChart({ data = [], size = 220, title }) {
           {fmt(total)} €
         </text>
       </svg>
-      <div style={{ flex: 1, minWidth: 180 }}>
+      <div style={{ flex: '1 1 180px', minWidth: 0 }}>
         {title && <div style={{ fontSize: 12, color: 'var(--txt-dim)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>{title}</div>}
         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'grid', gap: 6 }}>
           {items.map((d, i) => {

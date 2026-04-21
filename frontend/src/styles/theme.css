@@ -321,7 +321,14 @@ button { cursor: pointer; }
    Responsive : tablette (<= 900px) — sidebar devient barre du bas
    ------------------------------------------------------------------- */
 @media (max-width: 900px) {
-  .app { grid-template-columns: 1fr; }
+  html, body { overflow-x: hidden; }
+  .app { grid-template-columns: 1fr; min-width: 0; }
+  .app main { min-width: 0; overflow-x: hidden; }
+  .card, .row { min-width: 0; max-width: 100%; overflow-wrap: anywhere; word-break: break-word; }
+  .card > *, .row > * { min-width: 0; max-width: 100%; }
+  .title, .meta, h1, h2, h3, h4, p, li, label, span, strong { word-break: break-word; overflow-wrap: anywhere; }
+  pre { white-space: pre-wrap !important; word-break: break-word; overflow-wrap: anywhere; max-width: 100%; }
+  img, video { max-width: 100%; height: auto; }
   .sidebar {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto;
     height: auto; min-height: var(--mobile-nav-h);
@@ -408,6 +415,8 @@ button { cursor: pointer; }
   .topbar > div:last-child { width: 100%; }
   .topbar > div:last-child > * { width: 100%; }
   .card h3 { font-size: 11px; }
+  .card { padding: 12px; }
+  .row { padding: 10px; }
 }
 
 /* -------------------------------------------------------------------

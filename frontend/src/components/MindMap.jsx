@@ -102,7 +102,7 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
     <>
       <div className="card">
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-          <div style={{ flex: 1, minWidth: 200 }}>
+          <div style={{ flex: '1 1 200px', minWidth: 0 }}>
             <h3 style={{ margin: 0 }}>Carte mentale IA</h3>
             {mindmap.resume && <p style={{ margin: '6px 0 0', color: 'var(--txt-dim)', fontSize: 13 }}>{mindmap.resume}</p>}
             {mindmap.generatedAt && (
