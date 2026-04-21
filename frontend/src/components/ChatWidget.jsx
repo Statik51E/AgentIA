@@ -84,29 +84,9 @@ ${JSON.stringify(ctx, null, 2)}`;
     <>
       <button
         type="button"
+        className="chat-fab"
         onClick={() => setOpen(v => !v)}
         aria-label={open ? 'Fermer le chat AgIa' : 'Ouvrir le chat AgIa'}
-        style={{
-          position: 'fixed',
-          right: 20,
-          bottom: 20,
-          width: 60,
-          height: 60,
-          borderRadius: '50%',
-          border: '2px solid rgba(59, 190, 255, 0.55)',
-          background: 'linear-gradient(135deg, #0a0a0c, #1a1a22)',
-          cursor: 'pointer',
-          padding: 0,
-          zIndex: 1000,
-          boxShadow: '0 6px 24px rgba(59, 190, 255, 0.35), 0 0 0 4px rgba(59, 190, 255, 0.06)',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          overflow: 'hidden',
-          transition: 'transform 0.15s',
-        }}
-        onMouseOver={(e) => { e.currentTarget.style.transform = 'scale(1.06)'; }}
-        onMouseOut={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
       >
         <img
           src={`${import.meta.env.BASE_URL}icons/agia.png`}
@@ -120,21 +100,7 @@ ${JSON.stringify(ctx, null, 2)}`;
         <div
           role="dialog"
           aria-label={config.title}
-          style={{
-            position: 'fixed',
-            right: 20,
-            bottom: 90,
-            width: 'min(420px, calc(100vw - 40px))',
-            height: 'min(600px, calc(100vh - 120px))',
-            background: 'var(--bg-1, #0a0a0c)',
-            border: '1px solid var(--line, rgba(255,255,255,0.08))',
-            borderRadius: 16,
-            boxShadow: '0 10px 40px rgba(0, 0, 0, 0.5)',
-            zIndex: 1001,
-            display: 'flex',
-            flexDirection: 'column',
-            overflow: 'hidden',
-          }}
+          className="chat-panel"
         >
           <header style={{
             display: 'flex',

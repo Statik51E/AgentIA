@@ -37,7 +37,7 @@ export default function Sidebar() {
         </NavLink>
       ))}
 
-      <div style={{ marginTop: 'auto', paddingTop: 16, borderTop: '1px solid var(--line)', display: 'grid', gap: 6 }}>
+      <div className="sidebar-footer">
         <div style={{ fontSize: 11, color: 'var(--txt-soft)', wordBreak: 'break-all' }}>
           {user?.email || user?.displayName || 'Connecté'}
         </div>

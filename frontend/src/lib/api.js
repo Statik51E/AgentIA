@@ -67,6 +67,8 @@ export const api = {
   projects: {
     list: () => data.listProjects(),
     add: (d) => data.addProject(d),
+    intakeQuestions: ({ nom, description }) => ai.generateProjectIntake({ nom, description }),
+    buildIntakeDescription: (d) => ai.buildEnrichedProjectDescription(d),
     patch: (id, d) => data.patchProject(id, d),
     del: (id) => data.delProject(id),
     addTask: (pid, d) => data.addTask(pid, d),

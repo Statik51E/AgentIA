@@ -367,7 +367,7 @@ export async function listProjects() {
   return projects.map(p => ({ ...p, tasks: tasks.filter(t => t.project_id === p.id) }));
 }
 
-export async function addProject({ nom, description }) {
+export async function addProject({ nom, description, intake }) {
   if (!nom) throw new Error('nom requis');
   const priorite = computePriority({ nom, description });
   const row = {
@@ -377,6 +377,7 @@ export async function addProject({ nom, description }) {
     priorite,
     createdAt: nowIso(),
   };
+  if (intake && typeof intake === 'object') row.intake = intake;
   const ref = await addDoc(userCol('projects'), row);
   return { id: ref.id, ...row };
 }
@@ -389,6 +390,7 @@ export async function patchProject(id, data) {
   if (typeof data.priorite === 'number') patch.priorite = data.priorite;
   if (data.mindmap !== undefined) patch.mindmap = data.mindmap;
   if (data.brief !== undefined) patch.brief = data.brief;
+  if (data.intake !== undefined) patch.intake = data.intake;
   await updateDoc(userDoc('projects', id), patch);
   return snapDoc(await getDoc(userDoc('projects', id)));
 }

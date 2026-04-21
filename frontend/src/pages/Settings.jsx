@@ -7,7 +7,7 @@ import { useAuth } from '../lib/auth.jsx';
 const DEFAULT_MODEL = 'llama-3.3-70b-versatile';
 
 export default function Settings() {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [keys, setKeys] = useState([]); // string[]
   const [newKey, setNewKey] = useState('');
   const [model, setModel] = useState(DEFAULT_MODEL);
@@ -91,6 +91,9 @@ export default function Settings() {
         <div className="meta" style={{ marginTop: 8 }}>
           <div><strong>Email :</strong> {user?.email || '—'}</div>
           <div><strong>UID :</strong> <span style={{ fontFamily: 'monospace', fontSize: 12 }}>{user?.uid}</span></div>
+        </div>
+        <div style={{ marginTop: 12 }}>
+          <button className="btn ghost small" onClick={logout}>Se déconnecter</button>
         </div>
       </div>
 

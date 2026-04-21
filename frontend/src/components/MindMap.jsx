@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 
 const CAT_COLORS = {
   objectif:    '#4ade80',
@@ -9,12 +9,23 @@ const CAT_COLORS = {
   opportunite: '#34d399',
 };
 
-export default function MindMap({ mindmap, onRefresh, loading }) {
-  const [hover, setHover] = useState(null);
-  const width = 900, height = 600;
-  const cx = width / 2, cy = height / 2;
+const BASE_W = 900;
+const BASE_H = 600;
 
-  const layout = useMemo(() => buildLayout(mindmap, cx, cy), [mindmap, cx, cy]);
+export default function MindMap({ mindmap, onRefresh, loading }) {
+  const [fullscreen, setFullscreen] = useState(false);
+
+  useEffect(() => {
+    if (!fullscreen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    const onKey = (e) => { if (e.key === 'Escape') setFullscreen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.style.overflow = prev;
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [fullscreen]);
 
   if (!mindmap) {
     return (
@@ -30,91 +41,166 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
   }
 
   return (
-    <div className="card">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
-        <div>
-          <h3 style={{ margin: 0 }}>Carte mentale IA</h3>
-          {mindmap.resume && <p style={{ margin: '6px 0 0', color: 'var(--txt-dim)', fontSize: 13 }}>{mindmap.resume}</p>}
-          {mindmap.generatedAt && (
-            <div style={{ fontSize: 11, color: 'var(--txt-soft)', marginTop: 4 }}>
-              Générée le {new Date(mindmap.generatedAt).toLocaleString('fr-FR')}
-            </div>
-          )}
+    <>
+      <div className="card">
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, flexWrap: 'wrap', marginBottom: 8 }}>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <h3 style={{ margin: 0 }}>Carte mentale IA</h3>
+            {mindmap.resume && <p style={{ margin: '6px 0 0', color: 'var(--txt-dim)', fontSize: 13 }}>{mindmap.resume}</p>}
+            {mindmap.generatedAt && (
+              <div style={{ fontSize: 11, color: 'var(--txt-soft)', marginTop: 4 }}>
+                Générée le {new Date(mindmap.generatedAt).toLocaleString('fr-FR')}
+              </div>
+            )}
+          </div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+            <button className="btn ghost small" onClick={() => setFullscreen(true)} title="Afficher en plein écran">
+              ⛶ Plein écran
+            </button>
+            <button className="btn ghost small" onClick={onRefresh} disabled={loading}>
+              {loading ? 'Régénération…' : '🔄 Regénérer'}
+            </button>
+          </div>
         </div>
-        <button className="btn ghost small" onClick={onRefresh} disabled={loading}>
-          {loading ? 'Régénération…' : '🔄 Regénérer'}
-        </button>
+
+        <MindMapSvg mindmap={mindmap} wrapperStyle={inlineWrapper} />
+
+        <Legend />
       </div>
 
-      <div style={{ overflow: 'auto', background: 'var(--bg-2)', borderRadius: 10, border: '1px solid var(--line-soft)' }}>
-        <svg viewBox={`0 0 ${width} ${height}`} width="100%" style={{ minWidth: 600, display: 'block' }}>
-          {layout.branches.map((b, i) => (
-            <g key={i}>
-              <path d={b.path} stroke={b.color} strokeWidth="2" fill="none" opacity="0.55" />
-              {b.children.map((c, j) => (
-                <path key={j} d={c.path} stroke={b.color} strokeWidth="1.2" fill="none" opacity="0.35" />
-              ))}
-            </g>
-          ))}
+      {fullscreen && (
+        <div className="modal-backdrop" onClick={() => setFullscreen(false)}>
+          <div
+            className="modal large"
+            onClick={(e) => e.stopPropagation()}
+            role="dialog"
+            aria-label="Carte mentale en plein écran"
+          >
+            <div className="modal-header">
+              <div style={{ minWidth: 0 }}>
+                <h3 style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  🧠 {mindmap.racine || 'Carte mentale'}
+                </h3>
+                {mindmap.resume && (
+                  <div style={{ color: 'var(--txt-soft)', fontSize: 12, marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                    {mindmap.resume}
+                  </div>
+                )}
+              </div>
+              <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+                <button className="btn ghost small" onClick={onRefresh} disabled={loading}>
+                  {loading ? 'Régénération…' : '🔄 Regénérer'}
+                </button>
+                <button className="btn ghost small" onClick={() => setFullscreen(false)}>✕ Fermer</button>
+              </div>
+            </div>
+            <div className="modal-body" style={{ padding: 0, background: 'var(--bg-2)' }}>
+              <MindMapSvg
+                mindmap={mindmap}
+                wrapperStyle={{ width: '100%', height: '100%', overflow: 'auto', background: 'var(--bg-2)' }}
+                fit
+              />
+            </div>
+            <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
+              <Legend inline />
+              <div style={{ color: 'var(--txt-soft)', fontSize: 11 }}>Échap pour fermer</div>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
+  );
+}
 
-          {layout.branches.map((b, i) => (
-            <g key={`c-${i}`}>
-              {b.children.map((c, j) => (
-                <g key={j}
-                   onMouseEnter={() => setHover({ i, j, note: c.note })}
-                   onMouseLeave={() => setHover(null)}
-                   style={{ cursor: c.note ? 'help' : 'default' }}>
-                  <rect x={c.x - c.w / 2} y={c.y - 13} width={c.w} height="26" rx="13"
-                        fill="var(--bg-1)" stroke={b.color} strokeWidth="1.2" />
-                  <text x={c.x} y={c.y + 4} textAnchor="middle" fill="var(--txt)" fontSize="11" style={{ pointerEvents: 'none' }}>
-                    {c.title}
-                  </text>
-                </g>
-              ))}
-            </g>
-          ))}
+const inlineWrapper = {
+  overflow: 'auto',
+  background: 'var(--bg-2)',
+  borderRadius: 10,
+  border: '1px solid var(--line-soft)',
+};
 
-          {layout.branches.map((b, i) => (
-            <g key={`b-${i}`}>
-              <rect x={b.x - b.w / 2} y={b.y - 16} width={b.w} height="32" rx="16"
-                    fill={b.color} opacity="0.18" stroke={b.color} strokeWidth="1.5" />
-              <text x={b.x} y={b.y + 5} textAnchor="middle" fill="var(--txt)" fontSize="13" fontWeight="600" style={{ pointerEvents: 'none' }}>
-                {b.title}
-              </text>
-              <text x={b.x} y={b.y + 22} textAnchor="middle" fill={b.color} fontSize="9" style={{ pointerEvents: 'none', textTransform: 'uppercase', letterSpacing: 1 }}>
-                {b.categorie}
-              </text>
-            </g>
-          ))}
+function Legend({ inline = false }) {
+  return (
+    <div style={{ display: 'flex', gap: 10, marginTop: inline ? 0 : 10, flexWrap: 'wrap', fontSize: 11 }}>
+      {Object.entries(CAT_COLORS).map(([k, c]) => (
+        <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--txt-soft)' }}>
+          <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block' }} />
+          {k}
+        </span>
+      ))}
+    </div>
+  );
+}
 
-          <g>
-            <circle cx={cx} cy={cy} r="55" fill="var(--accent)" opacity="0.22" />
-            <circle cx={cx} cy={cy} r="55" fill="none" stroke="var(--accent)" strokeWidth="2" />
-            <text x={cx} y={cy + 5} textAnchor="middle" fill="var(--txt)" fontSize="14" fontWeight="700">
-              {truncate(layout.racine, 18)}
+function MindMapSvg({ mindmap, wrapperStyle, fit = false }) {
+  const [hover, setHover] = useState(null);
+  const cx = BASE_W / 2, cy = BASE_H / 2;
+  const layout = useMemo(() => buildLayout(mindmap, cx, cy), [mindmap, cx, cy]);
+
+  const svgProps = fit
+    ? { width: '100%', height: '100%', preserveAspectRatio: 'xMidYMid meet' }
+    : { width: '100%', style: { minWidth: 600, display: 'block' } };
+
+  return (
+    <div style={wrapperStyle}>
+      <svg viewBox={`0 0 ${BASE_W} ${BASE_H}`} {...svgProps}>
+        {layout.branches.map((b, i) => (
+          <g key={i}>
+            <path d={b.path} stroke={b.color} strokeWidth="2" fill="none" opacity="0.55" />
+            {b.children.map((c, j) => (
+              <path key={j} d={c.path} stroke={b.color} strokeWidth="1.2" fill="none" opacity="0.35" />
+            ))}
+          </g>
+        ))}
+
+        {layout.branches.map((b, i) => (
+          <g key={`c-${i}`}>
+            {b.children.map((c, j) => (
+              <g key={j}
+                 onMouseEnter={() => setHover({ i, j, note: c.note })}
+                 onMouseLeave={() => setHover(null)}
+                 style={{ cursor: c.note ? 'help' : 'default' }}>
+                <rect x={c.x - c.w / 2} y={c.y - 13} width={c.w} height="26" rx="13"
+                      fill="var(--bg-1)" stroke={b.color} strokeWidth="1.2" />
+                <text x={c.x} y={c.y + 4} textAnchor="middle" fill="var(--txt)" fontSize="11" style={{ pointerEvents: 'none' }}>
+                  {c.title}
+                </text>
+              </g>
+            ))}
+          </g>
+        ))}
+
+        {layout.branches.map((b, i) => (
+          <g key={`b-${i}`}>
+            <rect x={b.x - b.w / 2} y={b.y - 16} width={b.w} height="32" rx="16"
+                  fill={b.color} opacity="0.18" stroke={b.color} strokeWidth="1.5" />
+            <text x={b.x} y={b.y + 5} textAnchor="middle" fill="var(--txt)" fontSize="13" fontWeight="600" style={{ pointerEvents: 'none' }}>
+              {b.title}
+            </text>
+            <text x={b.x} y={b.y + 22} textAnchor="middle" fill={b.color} fontSize="9" style={{ pointerEvents: 'none', textTransform: 'uppercase', letterSpacing: 1 }}>
+              {b.categorie}
             </text>
           </g>
-
-          {hover?.note && (
-            <g>
-              <rect x={10} y={height - 60} width={width - 20} height="50" rx="8"
-                    fill="var(--bg-1)" stroke="var(--line)" opacity="0.98" />
-              <text x={20} y={height - 38} fill="var(--txt-dim)" fontSize="12">
-                {truncate(hover.note, 130)}
-              </text>
-            </g>
-          )}
-        </svg>
-      </div>
-
-      <div style={{ display: 'flex', gap: 10, marginTop: 10, flexWrap: 'wrap', fontSize: 11 }}>
-        {Object.entries(CAT_COLORS).map(([k, c]) => (
-          <span key={k} style={{ display: 'inline-flex', alignItems: 'center', gap: 4, color: 'var(--txt-soft)' }}>
-            <span style={{ width: 10, height: 10, borderRadius: 2, background: c, display: 'inline-block' }} />
-            {k}
-          </span>
         ))}
-      </div>
+
+        <g>
+          <circle cx={cx} cy={cy} r="55" fill="var(--accent)" opacity="0.22" />
+          <circle cx={cx} cy={cy} r="55" fill="none" stroke="var(--accent)" strokeWidth="2" />
+          <text x={cx} y={cy + 5} textAnchor="middle" fill="var(--txt)" fontSize="14" fontWeight="700">
+            {truncate(layout.racine, 18)}
+          </text>
+        </g>
+
+        {hover?.note && (
+          <g>
+            <rect x={10} y={BASE_H - 60} width={BASE_W - 20} height="50" rx="8"
+                  fill="var(--bg-1)" stroke="var(--line)" opacity="0.98" />
+            <text x={20} y={BASE_H - 38} fill="var(--txt-dim)" fontSize="12">
+              {truncate(hover.note, 130)}
+            </text>
+          </g>
+        )}
+      </svg>
     </div>
   );
 }

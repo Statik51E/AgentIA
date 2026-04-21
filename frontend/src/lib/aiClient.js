@@ -475,6 +475,79 @@ export async function generateProjectBrief(project) {
 }
 
 // ---------------------------------------------------------------------
+// PROJECT INTAKE — questions personnalisées à la création d'un projet
+// ---------------------------------------------------------------------
+const INTAKE_SYSTEM = `Tu es CORE IA, coach de projet. Tu reçois le nom et une description brute d'un projet que l'utilisateur veut démarrer.
+Ta mission : poser 5 à 6 questions ciblées pour comprendre le projet en profondeur AVANT qu'il ne commence.
+
+Les questions doivent couvrir, dans cet ordre :
+1) Le SENS du projet (pourquoi maintenant, quel problème il résout, motivation profonde).
+2) Le RÉSULTAT concret attendu (à quoi ressemble la réussite, critère mesurable).
+3) Les COMPÉTENCES de l'utilisateur (ce qu'il sait déjà faire, expériences utiles).
+4) Les MOYENS / RESSOURCES disponibles (temps hebdo, budget, outils, réseau).
+5) Les CONTRAINTES ou risques connus (ce qui peut bloquer, échéance, dépendances).
+6) La PREMIÈRE étape concrète ou une question adaptée au projet.
+
+Réponds STRICTEMENT en JSON :
+{
+  "questions": [
+    { "id": "sens" | "resultat" | "competences" | "moyens" | "contraintes" | "etape", "titre": "Question en français direct (<= 140 car)", "placeholder": "Indice ou exemple court" }
+  ]
+}
+
+Règles :
+- Adapte les questions au projet : si c'est un projet créatif, parle d'inspiration ; si c'est business, parle de cible ; si c'est personnel, parle d'impact.
+- Français, tu, ton direct et bienveillant. Phrases courtes.
+- Retourne 5 à 6 questions, pas plus.`;
+
+const INTAKE_IDS = ['sens', 'resultat', 'competences', 'moyens', 'contraintes', 'etape'];
+
+export async function generateProjectIntake({ nom, description }) {
+  const fallback = [
+    { id: 'sens',        titre: 'Pourquoi ce projet est important pour toi en ce moment ?', placeholder: 'Le « pourquoi » profond' },
+    { id: 'resultat',    titre: 'À quoi ressemblerait ce projet une fois réussi ?',         placeholder: 'Résultat concret, mesurable' },
+    { id: 'competences', titre: 'Quelles compétences ou expériences tu apportes ?',         placeholder: 'Ce que tu sais déjà faire' },
+    { id: 'moyens',      titre: 'Quels moyens tu as (temps par semaine, budget, outils) ?', placeholder: 'Ressources concrètes' },
+    { id: 'contraintes', titre: 'Quelles contraintes ou risques tu identifies ?',            placeholder: 'Deadlines, blocages, dépendances' },
+    { id: 'etape',       titre: 'Quelle serait la toute première étape, dès cette semaine ?', placeholder: 'Action simple et atteignable' },
+  ];
+  try {
+    const content = await callGroq([
+      { role: 'system', content: INTAKE_SYSTEM },
+      { role: 'user', content: JSON.stringify({ nom: nom || '', description: description || '' }) },
+    ]);
+    const parsed = safeJson(content);
+    const qs = Array.isArray(parsed?.questions) ? parsed.questions : [];
+    const seen = new Set();
+    const out = qs.slice(0, 8).map((q, i) => {
+      let id = String(q?.id || '').toLowerCase().replace(/[^a-z0-9_-]+/g, '-').slice(0, 30);
+      if (!id || seen.has(id)) id = INTAKE_IDS[i] || `q${i}`;
+      seen.add(id);
+      return {
+        id,
+        titre: String(q?.titre || '').slice(0, 180),
+        placeholder: String(q?.placeholder || '').slice(0, 200),
+      };
+    }).filter(q => q.titre);
+    return out.length >= 3 ? out : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+export function buildEnrichedProjectDescription({ description, questions, answers }) {
+  const base = (description || '').trim();
+  const pairs = (questions || [])
+    .map(q => ({ titre: q.titre, answer: String(answers?.[q.id] || '').trim() }))
+    .filter(p => p.answer);
+  if (pairs.length === 0) return base;
+  const intakeBlock = pairs.map(p => `- **${p.titre}**\n  ${p.answer}`).join('\n');
+  return base
+    ? `${base}\n\n## Contexte (questionnaire IA)\n${intakeBlock}`
+    : `## Contexte (questionnaire IA)\n${intakeBlock}`;
+}
+
+// ---------------------------------------------------------------------
 // MINDMAP / BRAINSTORM — agent autonome sur un projet
 // ---------------------------------------------------------------------
 const MINDMAP_SYSTEM = `Tu es CORE IA. Tu es chargé de brainstormer de manière structurée sur un projet personnel.

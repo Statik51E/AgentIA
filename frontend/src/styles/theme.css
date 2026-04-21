@@ -18,6 +18,9 @@
   --radius-sm: 10px;
   --shadow: 0 1px 0 rgba(255,255,255,0.03) inset, 0 10px 40px -12px rgba(0,0,0,0.6);
   --ease: cubic-bezier(.2,.7,.2,1);
+  --sab: env(safe-area-inset-bottom, 0px);
+  --sat: env(safe-area-inset-top, 0px);
+  --mobile-nav-h: 64px;
   font-family: -apple-system, BlinkMacSystemFont, "Inter", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
   font-feature-settings: "ss01", "cv11";
 }
@@ -29,6 +32,7 @@ body {
   color: var(--txt);
   -webkit-font-smoothing: antialiased;
   overscroll-behavior: none;
+  -webkit-tap-highlight-color: transparent;
 }
 a { color: inherit; text-decoration: none; }
 button, input, textarea, select { font: inherit; color: inherit; }
@@ -78,9 +82,18 @@ button { cursor: pointer; }
 .nav-item .dot { width: 6px; height: 6px; border-radius: 999px; background: var(--txt-soft); }
 .nav-item.active .dot { background: var(--accent); box-shadow: 0 0 10px var(--accent); }
 
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+  display: grid;
+  gap: 6px;
+}
+
 /* Topbar */
 .topbar {
   display: flex; align-items: center; justify-content: space-between;
+  gap: 12px;
   margin-bottom: 22px;
 }
 .topbar h1 { font-size: 22px; font-weight: 600; letter-spacing: -0.2px; margin: 0; }
@@ -104,6 +117,31 @@ button { cursor: pointer; }
 .card .big { font-size: 28px; font-weight: 600; letter-spacing: -0.4px; }
 .card .delta { font-size: 12px; color: var(--txt-soft); margin-top: 4px; }
 
+/* Clickable card (Link wrapper) */
+.card-link {
+  position: relative;
+  display: block;
+  cursor: pointer;
+  color: inherit;
+  text-decoration: none;
+}
+.card-link:hover { border-color: var(--accent); transform: translateY(-1px); }
+.card-link:active { transform: translateY(0); }
+.card-link:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.card-link .card-link-arrow {
+  position: absolute;
+  top: 14px; right: 16px;
+  color: var(--txt-soft);
+  font-size: 16px;
+  opacity: 0.6;
+  transition: transform 200ms var(--ease), color 200ms var(--ease), opacity 200ms var(--ease);
+}
+.card-link:hover .card-link-arrow {
+  color: var(--accent);
+  opacity: 1;
+  transform: translateX(3px);
+}
+
 /* Lists */
 .list { display: flex; flex-direction: column; gap: 8px; }
 .row {
@@ -113,6 +151,7 @@ button { cursor: pointer; }
   background: var(--bg-1);
   border-radius: var(--radius-sm);
   transition: background 160ms var(--ease), border-color 160ms var(--ease);
+  gap: 10px;
 }
 .row:hover { background: var(--bg-2); border-color: var(--line); }
 .row .meta { color: var(--txt-soft); font-size: 12px; }
@@ -198,18 +237,184 @@ button { cursor: pointer; }
 /* Empty state */
 .empty { color: var(--txt-soft); font-size: 13px; padding: 18px; text-align: center; }
 
-/* Responsive */
+/* Chat widget */
+.chat-fab {
+  position: fixed;
+  right: 20px;
+  bottom: calc(20px + var(--sab));
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  border: 2px solid rgba(59, 190, 255, 0.55);
+  background: linear-gradient(135deg, #0a0a0c, #1a1a22);
+  cursor: pointer;
+  padding: 0;
+  z-index: 1000;
+  box-shadow: 0 6px 24px rgba(59, 190, 255, 0.35), 0 0 0 4px rgba(59, 190, 255, 0.06);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  transition: transform 0.15s;
+}
+.chat-fab:hover { transform: scale(1.06); }
+
+.chat-panel {
+  position: fixed;
+  right: 20px;
+  bottom: calc(90px + var(--sab));
+  width: min(420px, calc(100vw - 40px));
+  height: min(600px, calc(100vh - 120px - var(--sab)));
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+  z-index: 1001;
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+
+/* Generic modal overlay */
+.modal-backdrop {
+  position: fixed; inset: 0;
+  background: rgba(4, 4, 8, 0.72);
+  backdrop-filter: blur(6px);
+  z-index: 2000;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+  padding-bottom: calc(20px + var(--sab));
+}
+.modal {
+  background: var(--bg-1);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: 0 20px 60px rgba(0,0,0,0.6);
+  width: 100%;
+  max-width: 640px;
+  max-height: calc(100vh - 40px - var(--sab));
+  display: flex; flex-direction: column;
+  overflow: hidden;
+}
+.modal.large { max-width: 1100px; height: min(92vh, 900px); }
+.modal-header {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid var(--line-soft);
+  background: var(--bg-2);
+}
+.modal-header h3 { margin: 0; font-size: 15px; font-weight: 600; text-transform: none; letter-spacing: 0; color: var(--txt); }
+.modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 18px;
+}
+.modal-footer {
+  display: flex; gap: 8px; justify-content: flex-end;
+  padding: 12px 18px;
+  border-top: 1px solid var(--line-soft);
+  background: var(--bg-2);
+  flex-wrap: wrap;
+}
+
+/* Fullscreen svg wrapper used by MindMap */
+.svg-fit { width: 100%; height: 100%; display: block; }
+
+/* -------------------------------------------------------------------
+   Responsive : tablette (<= 900px) — sidebar devient barre du bas
+   ------------------------------------------------------------------- */
 @media (max-width: 900px) {
   .app { grid-template-columns: 1fr; }
   .sidebar {
     position: fixed; left: 0; right: 0; bottom: 0; top: auto;
-    height: auto; border-right: 0; border-top: 1px solid var(--line-soft);
-    flex-direction: row; justify-content: space-around; padding: 10px;
+    height: auto; min-height: var(--mobile-nav-h);
+    border-right: 0;
+    border-top: 1px solid var(--line-soft);
+    flex-direction: row; justify-content: space-around; align-items: stretch;
+    gap: 2px;
+    padding: 6px 6px calc(6px + var(--sab));
     z-index: 20;
+    backdrop-filter: blur(14px);
+    background: rgba(10,10,12,0.88);
   }
-  .brand { display: none; }
-  .nav-item { flex-direction: column; gap: 4px; padding: 8px 10px; font-size: 11px; }
-  .app main { padding: 20px 16px 110px; }
-  .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr 1fr; }
+  .brand, .sidebar-footer { display: none; }
+  .nav-item {
+    flex: 1; min-width: 0;
+    flex-direction: column; justify-content: center;
+    gap: 3px;
+    padding: 6px 4px;
+    font-size: 10.5px;
+    text-align: center;
+    border-radius: 10px;
+  }
+  .nav-item .dot { width: 5px; height: 5px; }
+  .nav-item span:last-child {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    max-width: 100%;
+  }
+
+  .app main {
+    padding: 16px 14px calc(var(--mobile-nav-h) + 20px + var(--sab));
+    max-width: 100%;
+  }
+
+  .topbar { flex-wrap: wrap; gap: 10px; margin-bottom: 16px; }
+  .topbar h1 { font-size: 20px; }
+
+  .grid { gap: 12px; }
   .grid.cols-2 { grid-template-columns: 1fr; }
+
+  .card { padding: 14px; border-radius: 12px; }
+  .card .big { font-size: 24px; }
+
+  .form .row2, .form .row3 { grid-template-columns: 1fr; gap: 8px; }
+
+  .row { flex-wrap: wrap; padding: 10px 12px; }
+  .row > div:last-child { flex-wrap: wrap; }
+
+  /* Prevent iOS zoom on focus (font-size >=16) */
+  .input, .select, .textarea { font-size: 16px; padding: 12px 13px; }
+  .btn { padding: 12px 14px; min-height: 44px; }
+  .btn.small { padding: 8px 10px; font-size: 12px; min-height: 34px; }
+
+  .card-link .card-link-arrow { top: 12px; right: 12px; font-size: 14px; opacity: 1; }
+
+  /* Chat pushed above bottom nav */
+  .chat-fab {
+    right: 14px;
+    bottom: calc(var(--mobile-nav-h) + 14px + var(--sab));
+    width: 54px; height: 54px;
+  }
+  .chat-fab img { width: 46px !important; height: 46px !important; }
+  .chat-panel {
+    right: 10px; left: 10px;
+    width: auto;
+    bottom: calc(var(--mobile-nav-h) + 14px + var(--sab));
+    height: calc(100vh - var(--mobile-nav-h) - 40px - var(--sab));
+    max-height: 640px;
+  }
+
+  .modal { border-radius: 12px; }
+  .modal.large { height: calc(100vh - 40px - var(--sab)); max-width: none; }
+  .modal-body { padding: 14px; }
+  .modal-footer { padding: 10px 14px; }
+}
+
+/* -------------------------------------------------------------------
+   Responsive : mobile portrait (<= 600px)
+   ------------------------------------------------------------------- */
+@media (max-width: 600px) {
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr 1fr; }
+  .topbar { flex-direction: column; align-items: stretch; }
+  .topbar > div:last-child { width: 100%; }
+  .topbar > div:last-child > * { width: 100%; }
+  .card h3 { font-size: 11px; }
+}
+
+/* -------------------------------------------------------------------
+   Responsive : petit écran (<= 420px)
+   ------------------------------------------------------------------- */
+@media (max-width: 420px) {
+  .grid.cols-3, .grid.cols-4 { grid-template-columns: 1fr; }
+  .app main { padding-left: 10px; padding-right: 10px; }
+  .nav-item { font-size: 9.5px; padding: 6px 2px; }
 }

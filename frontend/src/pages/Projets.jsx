@@ -20,6 +20,7 @@ export default function Projets() {
   const [briefing, setBriefing] = useState(null); // project id
   const [bulkRunning, setBulkRunning] = useState(false);
   const [err, setErr] = useState('');
+  const [intake, setIntake] = useState(null); // { nom, description, questions, answers, loading }
 
   const load = async () => { try { setProjects(await api.projects.list()); } catch (e) { setErr(e.message); } };
   useEffect(() => { load(); }, []);
@@ -28,12 +29,50 @@ export default function Projets() {
     return () => { try { unsub?.(); } catch {} };
   }, []);
 
-  const add = async (e) => {
+  const openIntake = async (e) => {
     e.preventDefault();
     if (!form.nom.trim()) return;
-    await api.projects.add(form);
-    setForm({ nom: '', description: '' });
-    load();
+    setErr('');
+    setIntake({ nom: form.nom.trim(), description: form.description, questions: [], answers: {}, loading: true });
+    try {
+      const questions = await api.projects.intakeQuestions({ nom: form.nom.trim(), description: form.description });
+      setIntake(prev => prev ? { ...prev, questions, loading: false } : prev);
+    } catch (ex) {
+      setErr(ex.message);
+      setIntake(prev => prev ? { ...prev, loading: false } : prev);
+    }
+  };
+
+  const finishIntake = async ({ skip = false } = {}) => {
+    if (!intake) return;
+    const enrichedDescription = skip
+      ? intake.description
+      : api.projects.buildIntakeDescription({
+          description: intake.description,
+          questions: intake.questions,
+          answers: intake.answers,
+        });
+    const intakePayload = skip ? null : {
+      questions: intake.questions,
+      answers: intake.answers,
+      generatedAt: new Date().toISOString(),
+    };
+    try {
+      await api.projects.add({
+        nom: intake.nom,
+        description: enrichedDescription || null,
+        intake: intakePayload,
+      });
+      setForm({ nom: '', description: '' });
+      setIntake(null);
+      load();
+    } catch (ex) {
+      setErr(ex.message);
+    }
+  };
+
+  const updateAnswer = (qid, value) => {
+    setIntake(prev => prev ? { ...prev, answers: { ...prev.answers, [qid]: value } } : prev);
   };
   const delProject = async (id) => { await api.projects.del(id); if (openMap === id) setOpenMap(null); load(); };
   const cycleStatus = async (p) => {
@@ -112,11 +151,16 @@ export default function Projets() {
 
       <div className="card" style={{ marginBottom: 18 }}>
         <h3>Nouveau projet</h3>
-        <form className="form" onSubmit={add} style={{ marginTop: 10 }}>
+        <form className="form" onSubmit={openIntake} style={{ marginTop: 10 }}>
           <input className="input" placeholder="Nom du projet" value={form.nom} onChange={e => setForm({ ...form, nom: e.target.value })} required />
-          <textarea className="textarea" placeholder="Description (optionnel — aide la priorisation et le brainstorm IA)"
+          <textarea className="textarea" placeholder="Description (optionnel — l'IA te posera des questions ensuite pour affiner)"
                     value={form.description} onChange={e => setForm({ ...form, description: e.target.value })} />
-          <button className="btn" type="submit">Créer</button>
+          <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' }}>
+            <button className="btn" type="submit">✨ Créer avec l'IA</button>
+            <span style={{ color: 'var(--txt-soft)', fontSize: 12 }}>
+              L'IA te pose 5-6 questions pour saisir le sens, tes compétences et tes moyens.
+            </span>
+          </div>
         </form>
       </div>
 
@@ -201,8 +245,78 @@ export default function Projets() {
         })}
       </div>
 
+      {intake && (
+        <IntakeModal
+          intake={intake}
+          onClose={() => setIntake(null)}
+          onChange={updateAnswer}
+          onSubmit={() => finishIntake({ skip: false })}
+          onSkip={() => finishIntake({ skip: true })}
+        />
+      )}
+
       <ChatWidget expertise="project" />
     </>
+  );
+}
+
+function IntakeModal({ intake, onClose, onChange, onSubmit, onSkip }) {
+  const hasAnswers = Object.values(intake.answers || {}).some(v => String(v || '').trim());
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Questions IA pour ce projet">
+        <div className="modal-header">
+          <div style={{ minWidth: 0 }}>
+            <h3>✨ Cadrons ton projet : « {intake.nom} »</h3>
+            <div style={{ color: 'var(--txt-soft)', fontSize: 12, marginTop: 2 }}>
+              Prends 2 min. Ces réponses nourrissent le brief IA, la carte mentale et les conseils.
+            </div>
+          </div>
+          <button className="btn ghost small" onClick={onClose}>✕</button>
+        </div>
+        <div className="modal-body">
+          {intake.loading ? (
+            <div className="empty">L'IA prépare tes questions…</div>
+          ) : intake.questions.length === 0 ? (
+            <div className="empty" style={{ color: 'var(--err)' }}>
+              Impossible de générer les questions. Crée le projet sans questionnaire ou réessaie.
+            </div>
+          ) : (
+            <div className="form">
+              {intake.questions.map((q, i) => (
+                <div key={q.id} style={{ display: 'grid', gap: 6 }}>
+                  <label style={{ fontSize: 13, color: 'var(--txt)' }}>
+                    <span style={{ color: 'var(--accent)', marginRight: 6 }}>{i + 1}.</span>
+                    {q.titre}
+                  </label>
+                  <textarea
+                    className="textarea"
+                    style={{ minHeight: 64 }}
+                    placeholder={q.placeholder || 'Ta réponse…'}
+                    value={intake.answers[q.id] || ''}
+                    onChange={e => onChange(q.id, e.target.value)}
+                  />
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+        <div className="modal-footer">
+          <button className="btn ghost" type="button" onClick={onSkip}>
+            Créer sans répondre
+          </button>
+          <button
+            className="btn"
+            type="button"
+            onClick={onSubmit}
+            disabled={intake.loading || !hasAnswers}
+            title={!hasAnswers ? 'Réponds à au moins une question' : ''}
+          >
+            Créer le projet
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
