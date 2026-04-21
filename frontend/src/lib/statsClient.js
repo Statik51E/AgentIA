@@ -64,10 +64,13 @@ export async function monthlyStats(monthStr = null) {
     }
   }
 
-  const chargesFixes = fixed.reduce((s, f) => s + (f.montant || 0), 0);
+  const fixedDepenses = fixed.filter(f => f.type !== 'revenu');
+  const fixedRevenus  = fixed.filter(f => f.type === 'revenu');
+  const chargesFixes = fixedDepenses.reduce((s, f) => s + (f.montant || 0), 0);
+  const revenusFixesMensuels = fixedRevenus.reduce((s, f) => s + (f.montant || 0), 0);
 
   const fixedByCatMap = {};
-  for (const f of fixed) {
+  for (const f of fixedDepenses) {
     const k = normCat(f.categorie);
     fixedByCatMap[k] = fixedByCatMap[k] || { categorie: k, total: 0, count: 0 };
     fixedByCatMap[k].total += f.montant || 0;
@@ -116,6 +119,7 @@ export async function monthlyStats(monthStr = null) {
     revenuMois,
     depenseMois: +depenseMois.toFixed(2),
     chargesFixes,
+    revenusFixesMensuels: +revenusFixesMensuels.toFixed(2),
     budgetDisponible: +budgetDisponible.toFixed(2),
     projectionMois,
     perCategorie: Object.values(byCategory).sort((a, b) => (b.depense || 0) - (a.depense || 0)),

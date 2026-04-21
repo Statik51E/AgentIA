@@ -186,9 +186,13 @@ async function buildContextSnapshot(kind = 'finance') {
         alertes: stats.alertes,
         anomalies: summary.anomalies,
         top_categories: (stats.totauxParCategorie || []).slice(0, 8),
-        charges_fixes: fixed.filter(f => f.actif !== false).slice(0, 30).map(f => ({
+        charges_fixes: fixed.filter(f => f.actif !== false && f.type !== 'revenu').slice(0, 30).map(f => ({
           libelle: f.libelle, montant: f.montant, categorie: f.categorie, jour_mois: f.jour_mois,
         })),
+        revenus_fixes: fixed.filter(f => f.actif !== false && f.type === 'revenu').slice(0, 10).map(f => ({
+          libelle: f.libelle, montant: f.montant, jour_mois: f.jour_mois,
+        })),
+        revenus_fixes_total_mensuel: summary.revenus_fixes || 0,
         comptes: accounts.slice(0, 10).map(a => ({ nom: a.nom, type: a.type, solde: a.solde })),
         objectifs: goals.slice(0, 10).map(g => ({ nom: g.nom, cible: g.cible, actuel: g.actuel, deadline: g.deadline })),
         historique_3_mois: history,

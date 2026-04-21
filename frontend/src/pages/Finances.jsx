@@ -19,7 +19,7 @@ const TABS = [
   { id: 'accounts',     label: 'Comptes' },
   { id: 'goals',        label: 'Objectifs' },
   { id: 'evolution',    label: 'Évolution' },
-  { id: 'fixed',        label: 'Charges fixes' },
+  { id: 'fixed',        label: 'Récurrents' },
   { id: 'overdraft',    label: 'Plan anti-découvert' },
   { id: 'statement',    label: 'Import relevé' },
 ];

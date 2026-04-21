@@ -132,6 +132,7 @@ export async function financesSummary() {
   ]);
   const rows = snapAll(fSnap);
   const accounts = snapAll(aSnap);
+  const fixedRows = snapAll(fxSnap);
   const revenus = rows.filter(r => r.type === 'revenu').reduce((s, r) => s + (r.montant || 0), 0);
   const depenses = rows.filter(r => r.type === 'depense').reduce((s, r) => s + (r.montant || 0), 0);
   const solde_initial_total = accounts.reduce((s, a) => s + (Number(a.solde_initial) || 0), 0);
@@ -142,10 +143,11 @@ export async function financesSummary() {
     byCatMap[k].total += r.montant || 0;
   }
   const byCat = Object.values(byCatMap).sort((a, b) => b.total - a.total);
-  const charges_fixes = snapAll(fxSnap).reduce((s, r) => s + (r.montant || 0), 0);
+  const charges_fixes = fixedRows.filter(r => r.type !== 'revenu').reduce((s, r) => s + (r.montant || 0), 0);
+  const revenus_fixes = fixedRows.filter(r => r.type === 'revenu').reduce((s, r) => s + (r.montant || 0), 0);
   const anomalies = detectAnomalies(rows);
   const solde = solde_initial_total + revenus - depenses;
-  return { revenus, depenses, solde, solde_initial_total, byCat, anomalies, charges_fixes, solde_apres_charges: solde - charges_fixes };
+  return { revenus, depenses, solde, solde_initial_total, byCat, anomalies, charges_fixes, revenus_fixes, solde_apres_charges: solde - charges_fixes };
 }
 
 function detectAnomalies(rows) {
@@ -207,7 +209,7 @@ export async function listFixed() {
   return snapAll(snap);
 }
 
-export async function addFixed({ libelle, montant, categorie, jour_mois, actif }) {
+export async function addFixed({ libelle, montant, categorie, jour_mois, actif, type }) {
   if (!libelle) throw new Error('libelle requis');
   if (typeof montant !== 'number' || montant <= 0) throw new Error('montant invalide');
   const row = {
@@ -216,6 +218,7 @@ export async function addFixed({ libelle, montant, categorie, jour_mois, actif }
     categorie: categorie || null,
     jour_mois: Number.isInteger(jour_mois) ? jour_mois : null,
     actif: actif === false ? false : true,
+    type: type === 'revenu' ? 'revenu' : 'depense',
     createdAt: nowIso(),
   };
   const ref = await addDoc(userCol('fixed_expenses'), row);
@@ -229,6 +232,7 @@ export async function patchFixed(id, data) {
   if (data.categorie !== undefined) patch.categorie = data.categorie;
   if (data.jour_mois !== undefined) patch.jour_mois = data.jour_mois;
   if (typeof data.actif === 'boolean') patch.actif = data.actif;
+  if (data.type === 'revenu' || data.type === 'depense') patch.type = data.type;
   await updateDoc(userDoc('fixed_expenses', id), patch);
   return snapDoc(await getDoc(userDoc('fixed_expenses', id)));
 }
