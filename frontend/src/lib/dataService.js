@@ -125,10 +125,16 @@ export async function delFinance(id) {
 }
 
 export async function financesSummary() {
-  const snap = await getDocs(userCol('finances'));
-  const rows = snapAll(snap);
+  const [fSnap, aSnap, fxSnap] = await Promise.all([
+    getDocs(userCol('finances')),
+    getDocs(userCol('accounts')),
+    getDocs(query(userCol('fixed_expenses'), where('actif', '==', true))),
+  ]);
+  const rows = snapAll(fSnap);
+  const accounts = snapAll(aSnap);
   const revenus = rows.filter(r => r.type === 'revenu').reduce((s, r) => s + (r.montant || 0), 0);
   const depenses = rows.filter(r => r.type === 'depense').reduce((s, r) => s + (r.montant || 0), 0);
+  const solde_initial_total = accounts.reduce((s, a) => s + (Number(a.solde_initial) || 0), 0);
   const byCatMap = {};
   for (const r of rows) {
     const k = `${r.categorie || ''}|${r.type}`;
@@ -136,11 +142,10 @@ export async function financesSummary() {
     byCatMap[k].total += r.montant || 0;
   }
   const byCat = Object.values(byCatMap).sort((a, b) => b.total - a.total);
-  const fixedSnap = await getDocs(query(userCol('fixed_expenses'), where('actif', '==', true)));
-  const charges_fixes = snapAll(fixedSnap).reduce((s, r) => s + (r.montant || 0), 0);
+  const charges_fixes = snapAll(fxSnap).reduce((s, r) => s + (r.montant || 0), 0);
   const anomalies = detectAnomalies(rows);
-  const solde = revenus - depenses;
-  return { revenus, depenses, solde, byCat, anomalies, charges_fixes, solde_apres_charges: solde - charges_fixes };
+  const solde = solde_initial_total + revenus - depenses;
+  return { revenus, depenses, solde, solde_initial_total, byCat, anomalies, charges_fixes, solde_apres_charges: solde - charges_fixes };
 }
 
 function detectAnomalies(rows) {
