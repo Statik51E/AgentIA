@@ -15,10 +15,14 @@ export default function Sidebar() {
   return (
     <aside className="sidebar">
       <div className="brand">
-        <span className="brand-dot" />
+        <img
+          src={`${import.meta.env.BASE_URL}icons/agia.png`}
+          alt="AgIa"
+          style={{ width: 36, height: 36, borderRadius: 8, objectFit: 'cover', flexShrink: 0 }}
+        />
         <div>
-          <div className="brand-name">CORE IA</div>
-          <div className="brand-sub">ULTIMATE</div>
+          <div className="brand-name">AgIa</div>
+          <div className="brand-sub">gestion intelligente</div>
         </div>
       </div>
       {items.map(it => (

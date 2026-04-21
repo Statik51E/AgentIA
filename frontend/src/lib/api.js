@@ -122,6 +122,7 @@ export const api = {
       const res = await ai.organizeIdeas(ideas);
       return { ...res, ideas };
     },
+    chat: ({ system, messages }) => ai.chatWithExpert({ system, messages }),
     projectBrief: async (projectId) => {
       const projects = await data.listProjects();
       const p = projects.find(x => x.id === projectId);

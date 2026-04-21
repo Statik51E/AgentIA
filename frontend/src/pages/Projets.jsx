@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import TopBar from '../components/TopBar.jsx';
 import MindMap from '../components/MindMap.jsx';
+import ChatWidget from '../components/ChatWidget.jsx';
 
 const STATUTS = [
   { k: 'todo', label: 'À faire' },
@@ -195,6 +196,8 @@ export default function Projets() {
           );
         })}
       </div>
+
+      <ChatWidget expertise="project" />
     </>
   );
 }

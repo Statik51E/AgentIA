@@ -99,6 +99,21 @@ function safeJson(s, fallback = {}) {
 }
 
 // ---------------------------------------------------------------------
+// FREE CHAT — conversation multi-tour avec system prompt paramétré
+// ---------------------------------------------------------------------
+export async function chatWithExpert({ system, messages }) {
+  if (!Array.isArray(messages) || messages.length === 0) throw new Error('messages requis');
+  const full = [
+    { role: 'system', content: system || 'Tu es un assistant direct et concret.' },
+    ...messages.slice(-20).map(m => ({
+      role: m.role === 'assistant' ? 'assistant' : 'user',
+      content: String(m.content || '').slice(0, 4000),
+    })),
+  ];
+  return callGroq(full, { json: false });
+}
+
+// ---------------------------------------------------------------------
 // ANALYZE ENTRY (free-form text → analysis/structure/improvements/actions)
 // ---------------------------------------------------------------------
 const ANALYZE_SYSTEM = `Tu es le CORE IA. Tu es direct, logique, orienté résultat, critique si nécessaire.

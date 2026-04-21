@@ -33,8 +33,18 @@ export default function Login() {
   return (
     <div style={wrap}>
       <div className="card fade-in" style={{ maxWidth: 420, width: '100%' }}>
-        <h2 style={{ marginTop: 0 }}>CORE IA ULTIMATE</h2>
-        <p style={{ color: 'var(--txt-soft)', marginTop: -4, fontSize: 13 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+          <img
+            src={`${import.meta.env.BASE_URL}icons/agia.png`}
+            alt="AgIa"
+            style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }}
+          />
+          <div>
+            <h2 style={{ margin: 0 }}>AgIa</h2>
+            <div style={{ color: 'var(--txt-soft)', fontSize: 12 }}>gestion personnelle intelligente</div>
+          </div>
+        </div>
+        <p style={{ color: 'var(--txt-soft)', marginTop: 10, fontSize: 13 }}>
           Tes données restent privées — elles sont rattachées uniquement à ton compte.
         </p>
 

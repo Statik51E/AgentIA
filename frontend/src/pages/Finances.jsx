@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api.js';
 import TopBar from '../components/TopBar.jsx';
 import { Tabs } from '../components/Tabs.jsx';
+import ChatWidget from '../components/ChatWidget.jsx';
 
 import Overview from './finances/Overview.jsx';
 import Transactions from './finances/Transactions.jsx';
@@ -111,6 +112,8 @@ export default function Finances() {
       {tab === 'fixed'        && <FixedExpenses fixed={fixed} onChanged={() => { load(); loadAdvice(); }} />}
       {tab === 'overdraft'    && <OverdraftPlan />}
       {tab === 'statement'    && <Statement accounts={accounts} onChanged={() => { load(); loadAdvice(); }} />}
+
+      <ChatWidget expertise="finance" />
     </>
   );
 }

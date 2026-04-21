@@ -11,11 +11,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.svg', 'icons/icon-192.svg', 'icons/icon-512.svg'],
+      includeAssets: ['icons/agia.png'],
       manifest: {
-        name: 'AgentIA — CORE IA ULTIMATE',
-        short_name: 'AgentIA',
-        description: 'Gestion personnelle intelligente — finances, projets, idées, agent IA.',
+        name: 'AgIa — Gestion personnelle intelligente',
+        short_name: 'AgIa',
+        description: 'AgIa — finances, projets, idées, chatbot IA expert.',
         theme_color: '#0a0a0c',
         background_color: '#0a0a0c',
         display: 'standalone',
@@ -23,8 +23,8 @@ export default defineConfig({
         start_url: BASE,
         scope: BASE,
         icons: [
-          { src: 'icons/icon-192.svg', sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
-          { src: 'icons/icon-512.svg', sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' },
+          { src: 'icons/agia.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: 'icons/agia.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
       workbox: {
