@@ -8,6 +8,11 @@ function userCol(name) {
   return collection(db, 'users', u.uid, name);
 }
 
+function normCat(s) {
+  const v = (s || '').toString().trim().toLowerCase();
+  return v || '(non catégorisé)';
+}
+
 export async function monthlyStats(monthStr = null) {
   const { monthStart, monthEnd, daysInMonth, dayOfMonth, isCurrent } = monthRange(monthStr);
   const daysRemaining = Math.max(0, daysInMonth - dayOfMonth);
@@ -28,7 +33,7 @@ export async function monthlyStats(monthStr = null) {
 
   const perCatMap = {};
   for (const d of depenses) {
-    const key = d.categorie || '(non catégorisé)';
+    const key = normCat(d.categorie);
     perCatMap[key] = perCatMap[key] || { categorie: key, total: 0, count: 0 };
     perCatMap[key].total += d.montant || 0;
     perCatMap[key].count += 1;
@@ -40,8 +45,9 @@ export async function monthlyStats(monthStr = null) {
 
   const byCategory = {};
   for (const b of budgets) {
-    byCategory[b.categorie] = {
-      categorie: b.categorie, limite: b.limite_mensuelle, budgetId: b.id,
+    const k = normCat(b.categorie);
+    byCategory[k] = {
+      categorie: k, limite: b.limite_mensuelle, budgetId: b.id,
       depense: 0, count: 0, pourcentage: 0, reste: b.limite_mensuelle,
     };
   }
@@ -62,7 +68,7 @@ export async function monthlyStats(monthStr = null) {
 
   const fixedByCatMap = {};
   for (const f of fixed) {
-    const k = f.categorie || '(non catégorisé)';
+    const k = normCat(f.categorie);
     fixedByCatMap[k] = fixedByCatMap[k] || { categorie: k, total: 0, count: 0 };
     fixedByCatMap[k].total += f.montant || 0;
     fixedByCatMap[k].count += 1;
