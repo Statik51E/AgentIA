@@ -557,6 +557,7 @@ Réponds STRICTEMENT en JSON :
 {
   "racine": "nom court du projet (<= 60 car)",
   "resume": "phrase de synthèse (1-2 lignes)",
+  "synthese": "synthèse organisée en markdown (3-6 bullets) qui regroupe et ordonne les grandes idées",
   "branches": [
     {
       "titre": "axe majeur (<= 40 car)",
@@ -575,7 +576,34 @@ Règles :
 - Brainstorme largement : propose des angles auxquels l'utilisateur n'aurait pas pensé.
 - N'invente pas de deadlines ou nombres précis.`;
 
-export async function brainstormMindmap(project) {
+const MINDMAP_EXPAND_SYSTEM = `Tu es CORE IA. Tu reçois un projet ET SA CARTE MENTALE EXISTANTE. Ta mission : l'ENRICHIR, pas la refaire.
+
+Méthode :
+1) Conserve les branches existantes pertinentes (garde-les à l'identique ou reformule-les légèrement). Tu peux en fusionner deux redondantes.
+2) Ajoute 2 à 4 NOUVELLES branches qui explorent des angles manquants — choisis des catégories sous-représentées (ex : si risques manquent, ajoute-en).
+3) Ajoute de nouveaux enfants aux branches existantes quand c'est utile (axe trop creux).
+4) Produis un "resume" court (1-2 phrases) ET une "synthese" plus riche : 4 à 6 bullets markdown qui organisent CLAIREMENT les grandes idées du projet en ordre logique (sens → objectifs → étapes → risques → ressources → prochains pas).
+
+Réponds STRICTEMENT en JSON :
+{
+  "racine": "nom court du projet (<= 60 car)",
+  "resume": "phrase de synthèse (1-2 lignes)",
+  "synthese": "synthèse organisée en markdown (4-6 bullets, peut contenir sous-bullets)",
+  "branches": [
+    {
+      "titre": "axe (<= 40 car)",
+      "categorie": "objectif"|"etape"|"risque"|"ressource"|"idee"|"opportunite",
+      "enfants": [ { "titre": "sous-idée (<= 60 car)", "note": "détail optionnel" } ]
+    }
+  ]
+}
+
+Règles :
+- 5 à 9 branches au total après enrichissement.
+- Français, phrases courtes, pas de remplissage.
+- N'invente pas de dates, budgets ou personnes.`;
+
+export async function brainstormMindmap(project, { existing } = {}) {
   const payload = {
     nom: project.nom,
     description: project.description || '',
@@ -583,8 +611,20 @@ export async function brainstormMindmap(project) {
     priorite: project.priorite,
     taches: (project.tasks || []).map(t => ({ titre: t.titre, statut: t.statut })),
   };
+  const hasExisting = existing && Array.isArray(existing.branches) && existing.branches.length > 0;
+  if (hasExisting) {
+    payload.carte_existante = {
+      racine: existing.racine,
+      resume: existing.resume,
+      synthese: existing.synthese,
+      branches: existing.branches.slice(0, 10).map(b => ({
+        titre: b.titre, categorie: b.categorie,
+        enfants: (b.enfants || []).slice(0, 8).map(c => ({ titre: c.titre, note: c.note })),
+      })),
+    };
+  }
   const content = await callGroq([
-    { role: 'system', content: MINDMAP_SYSTEM },
+    { role: 'system', content: hasExisting ? MINDMAP_EXPAND_SYSTEM : MINDMAP_SYSTEM },
     { role: 'user', content: JSON.stringify(payload) },
   ]);
   const parsed = safeJson(content);
@@ -593,15 +633,16 @@ export async function brainstormMindmap(project) {
 
 function normalizeMindmap(raw, project) {
   const racine = String(raw?.racine || project.nom || 'Projet').slice(0, 80);
-  const branches = Array.isArray(raw?.branches) ? raw.branches.slice(0, 8) : [];
+  const branches = Array.isArray(raw?.branches) ? raw.branches.slice(0, 10) : [];
   const CATS = ['objectif','etape','risque','ressource','idee','opportunite'];
   return {
     racine,
-    resume: String(raw?.resume || '').slice(0, 300),
+    resume: String(raw?.resume || '').slice(0, 400),
+    synthese: String(raw?.synthese || '').slice(0, 2000),
     branches: branches.map(b => ({
       titre: String(b?.titre || '').slice(0, 60),
       categorie: CATS.includes(b?.categorie) ? b.categorie : 'idee',
-      enfants: Array.isArray(b?.enfants) ? b.enfants.slice(0, 6).map(c => ({
+      enfants: Array.isArray(b?.enfants) ? b.enfants.slice(0, 8).map(c => ({
         titre: String(c?.titre || '').slice(0, 80),
         note: c?.note ? String(c.note).slice(0, 200) : null,
       })).filter(c => c.titre) : [],

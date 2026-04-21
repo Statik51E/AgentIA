@@ -78,7 +78,7 @@ export const api = {
       const projects = await data.listProjects();
       const p = projects.find(x => x.id === projectId);
       if (!p) throw new Error('projet introuvable');
-      const mindmap = await ai.brainstormMindmap(p);
+      const mindmap = await ai.brainstormMindmap(p, { existing: p.mindmap });
       await data.patchProject(projectId, { mindmap });
       return mindmap;
     },

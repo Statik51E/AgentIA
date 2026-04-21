@@ -126,8 +126,8 @@ export default function Projets() {
   };
 
   const brainstormAll = async () => {
-    const candidates = projects.filter(p => p.statut !== 'termine' && !p.mindmap);
-    if (!candidates.length) { setErr('Aucun projet sans carte mentale.'); return; }
+    const candidates = projects.filter(p => p.statut !== 'termine');
+    if (!candidates.length) { setErr('Aucun projet actif à brainstormer.'); return; }
     setBulkRunning(true); setErr('');
     try {
       for (const p of candidates) {

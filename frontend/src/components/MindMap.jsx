@@ -117,7 +117,7 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
             </button>
             {downloadButtons}
             <button className="btn ghost small" onClick={onRefresh} disabled={loading}>
-              {loading ? 'Régénération…' : '🔄 Regénérer'}
+              {loading ? 'IA brainstorm…' : '🧠 Enrichir'}
             </button>
           </div>
         </div>
@@ -125,6 +125,8 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
         <MindMapSvg mindmap={mindmap} wrapperStyle={inlineWrapper} svgRef={inlineSvgRef} />
 
         <Legend />
+
+        {mindmap.synthese && <Synthese text={mindmap.synthese} />}
       </div>
 
       {fullscreen && (
@@ -149,7 +151,7 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
               <div style={{ display: 'flex', gap: 6, flexShrink: 0, flexWrap: 'wrap' }}>
                 {downloadButtons}
                 <button className="btn ghost small" onClick={onRefresh} disabled={loading}>
-                  {loading ? 'Régénération…' : '🔄 Regénérer'}
+                  {loading ? 'IA brainstorm…' : '🧠 Enrichir'}
                 </button>
                 <button className="btn ghost small" onClick={() => setFullscreen(false)}>✕ Fermer</button>
               </div>
@@ -162,6 +164,11 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
                 fit
               />
             </div>
+            {mindmap.synthese && (
+              <div style={{ padding: '10px 16px', background: 'var(--bg-1)', borderTop: '1px solid var(--line-soft)', maxHeight: '28vh', overflow: 'auto' }}>
+                <Synthese text={mindmap.synthese} compact />
+              </div>
+            )}
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <Legend inline />
               <div style={{ color: 'var(--txt-soft)', fontSize: 11 }}>Échap pour fermer</div>
@@ -181,6 +188,34 @@ const inlineWrapper = {
   aspectRatio: `${BASE_W} / ${BASE_H}`,
   overflow: 'hidden',
 };
+
+function Synthese({ text, compact = false }) {
+  return (
+    <div style={{
+      marginTop: compact ? 0 : 14,
+      background: 'var(--bg-1)',
+      border: compact ? 'none' : '1px solid var(--line-soft)',
+      borderRadius: compact ? 0 : 10,
+      padding: compact ? 0 : 12,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
+        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1 }}>
+          ✨ Synthèse IA
+        </span>
+      </div>
+      <pre style={{
+        margin: 0,
+        whiteSpace: 'pre-wrap',
+        wordBreak: 'break-word',
+        overflowWrap: 'anywhere',
+        fontFamily: 'inherit',
+        fontSize: 13,
+        lineHeight: 1.55,
+        color: 'var(--txt)',
+      }}>{text}</pre>
+    </div>
+  );
+}
 
 function Legend({ inline = false }) {
   return (
