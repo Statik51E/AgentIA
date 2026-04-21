@@ -20,6 +20,7 @@ export default function Projets() {
   const [briefing, setBriefing] = useState(null); // project id
   const [bulkRunning, setBulkRunning] = useState(false);
   const [err, setErr] = useState('');
+  const [info, setInfo] = useState('');
   const [intake, setIntake] = useState(null); // { nom, description, questions, answers, loading }
 
   const load = async () => { try { setProjects(await api.projects.list()); } catch (e) { setErr(e.message); } };
@@ -94,11 +95,14 @@ export default function Projets() {
   const delTask = async (pid, tid) => { await api.projects.delTask(pid, tid); load(); };
 
   const brainstorm = async (pid) => {
-    setBrainstorming(pid); setErr('');
+    setBrainstorming(pid); setErr(''); setInfo('');
     try {
-      await api.projects.brainstorm(pid);
+      const mm = await api.projects.brainstorm(pid);
       await load();
       setOpenMap(pid);
+      const nB = (mm?.branches || []).length;
+      const nE = (mm?.branches || []).reduce((s, b) => s + ((b.enfants || []).length), 0);
+      setInfo(`Brainstorm terminé : ${nB} axes · ${nE} idées. Voir la carte mentale ci-dessous.`);
     } catch (e) { setErr(e.message); }
     finally { setBrainstorming(null); }
   };
@@ -128,12 +132,22 @@ export default function Projets() {
   const brainstormAll = async () => {
     const candidates = projects.filter(p => p.statut !== 'termine');
     if (!candidates.length) { setErr('Aucun projet actif à brainstormer.'); return; }
-    setBulkRunning(true); setErr('');
+    setBulkRunning(true); setErr(''); setInfo('');
+    let done = 0; let failed = 0; let firstId = null;
     try {
       for (const p of candidates) {
-        try { await api.projects.brainstorm(p.id); } catch (e) { console.warn('[brainstorm]', p.nom, e.message); }
+        try {
+          await api.projects.brainstorm(p.id);
+          done += 1;
+          if (!firstId) firstId = p.id;
+        } catch (e) {
+          failed += 1;
+          console.warn('[brainstorm]', p.nom, e.message);
+        }
       }
       await load();
+      if (firstId) setOpenMap(firstId);
+      setInfo(`Brainstorm terminé : ${done} projet${done > 1 ? 's' : ''} enrichi${done > 1 ? 's' : ''}${failed ? ` · ${failed} échec(s)` : ''}. Clique « Carte mentale » sur chaque projet pour voir les idées.`);
     } finally { setBulkRunning(false); }
   };
 
@@ -165,6 +179,7 @@ export default function Projets() {
       </div>
 
       {err && <div className="empty" style={{ color: 'var(--err)', marginBottom: 10 }}>Erreur : {err}</div>}
+      {info && <div className="empty" style={{ color: 'var(--ok)', marginBottom: 10 }}>{info}</div>}
       {projects.length === 0 && <div className="empty">Aucun projet. Crée le premier.</div>}
 
       <div className="list">

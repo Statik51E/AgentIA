@@ -126,7 +126,7 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
 
         <Legend />
 
-        {mindmap.synthese && <Synthese text={mindmap.synthese} />}
+        <BrainstormPanel mindmap={mindmap} />
       </div>
 
       {fullscreen && (
@@ -164,11 +164,9 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
                 fit
               />
             </div>
-            {mindmap.synthese && (
-              <div style={{ padding: '10px 16px', background: 'var(--bg-1)', borderTop: '1px solid var(--line-soft)', maxHeight: '28vh', overflow: 'auto' }}>
-                <Synthese text={mindmap.synthese} compact />
-              </div>
-            )}
+            <div style={{ padding: '10px 16px', background: 'var(--bg-1)', borderTop: '1px solid var(--line-soft)', maxHeight: '32vh', overflow: 'auto' }}>
+              <BrainstormPanel mindmap={mindmap} compact />
+            </div>
             <div className="modal-footer" style={{ justifyContent: 'space-between' }}>
               <Legend inline />
               <div style={{ color: 'var(--txt-soft)', fontSize: 11 }}>Échap pour fermer</div>
@@ -189,30 +187,68 @@ const inlineWrapper = {
   overflow: 'hidden',
 };
 
-function Synthese({ text, compact = false }) {
+function BrainstormPanel({ mindmap, compact = false }) {
+  const branches = Array.isArray(mindmap?.branches) ? mindmap.branches : [];
+  const hasAny = branches.length > 0 || mindmap?.synthese || mindmap?.resume;
+  if (!hasAny) return null;
   return (
     <div style={{
       marginTop: compact ? 0 : 14,
       background: 'var(--bg-1)',
       border: compact ? 'none' : '1px solid var(--line-soft)',
       borderRadius: compact ? 0 : 10,
-      padding: compact ? 0 : 12,
+      padding: compact ? 0 : 14,
     }}>
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 8 }}>
-        <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1 }}>
-          ✨ Synthèse IA
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 10 }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--accent)', textTransform: 'uppercase', letterSpacing: 1 }}>
+          ✨ Ce que l'IA a brainstormé
+        </span>
+        <span style={{ fontSize: 11, color: 'var(--txt-soft)' }}>
+          {branches.length} axe{branches.length > 1 ? 's' : ''} ·{' '}
+          {branches.reduce((s, b) => s + ((b.enfants || []).length), 0)} idées
         </span>
       </div>
-      <pre style={{
-        margin: 0,
-        whiteSpace: 'pre-wrap',
-        wordBreak: 'break-word',
-        overflowWrap: 'anywhere',
-        fontFamily: 'inherit',
-        fontSize: 13,
-        lineHeight: 1.55,
-        color: 'var(--txt)',
-      }}>{text}</pre>
+
+      {mindmap.synthese && (
+        <div style={{ marginBottom: 14 }}>
+          <div style={{ fontSize: 11, fontWeight: 600, color: 'var(--txt-soft)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>
+            Synthèse organisée
+          </div>
+          <pre style={{
+            margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word', overflowWrap: 'anywhere',
+            fontFamily: 'inherit', fontSize: 13, lineHeight: 1.55, color: 'var(--txt)',
+          }}>{mindmap.synthese}</pre>
+        </div>
+      )}
+
+      {branches.length > 0 && (
+        <div style={{ display: 'grid', gap: 10 }}>
+          {branches.map((b, i) => {
+            const color = CAT_COLORS[b.categorie] || CAT_COLORS.idee;
+            const enfants = Array.isArray(b.enfants) ? b.enfants : [];
+            return (
+              <div key={i} style={{ borderLeft: `3px solid ${color}`, paddingLeft: 10 }}>
+                <div style={{ display: 'flex', alignItems: 'baseline', gap: 8, flexWrap: 'wrap' }}>
+                  <span style={{ fontSize: 10, fontWeight: 700, color, textTransform: 'uppercase', letterSpacing: 1 }}>
+                    {b.categorie || 'idee'}
+                  </span>
+                  <strong style={{ fontSize: 14, color: 'var(--txt)' }}>{b.titre}</strong>
+                </div>
+                {enfants.length > 0 && (
+                  <ul style={{ margin: '6px 0 0', paddingLeft: 18, color: 'var(--txt-dim)', fontSize: 13, lineHeight: 1.5 }}>
+                    {enfants.map((c, j) => (
+                      <li key={j}>
+                        <span style={{ color: 'var(--txt)' }}>{c.titre}</span>
+                        {c.note && <span style={{ color: 'var(--txt-soft)' }}> — {c.note}</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
