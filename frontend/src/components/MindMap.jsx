@@ -113,10 +113,12 @@ export default function MindMap({ mindmap, onRefresh, loading }) {
 }
 
 const inlineWrapper = {
-  overflow: 'auto',
   background: 'var(--bg-2)',
   borderRadius: 10,
   border: '1px solid var(--line-soft)',
+  width: '100%',
+  aspectRatio: `${BASE_W} / ${BASE_H}`,
+  overflow: 'hidden',
 };
 
 function Legend({ inline = false }) {
@@ -137,13 +139,15 @@ function MindMapSvg({ mindmap, wrapperStyle, fit = false }) {
   const cx = BASE_W / 2, cy = BASE_H / 2;
   const layout = useMemo(() => buildLayout(mindmap, cx, cy), [mindmap, cx, cy]);
 
-  const svgProps = fit
-    ? { width: '100%', height: '100%', preserveAspectRatio: 'xMidYMid meet' }
-    : { width: '100%', style: { minWidth: 600, display: 'block' } };
-
   return (
     <div style={wrapperStyle}>
-      <svg viewBox={`0 0 ${BASE_W} ${BASE_H}`} {...svgProps}>
+      <svg
+        viewBox={`0 0 ${BASE_W} ${BASE_H}`}
+        width="100%"
+        height="100%"
+        preserveAspectRatio="xMidYMid meet"
+        style={{ display: 'block', touchAction: 'pinch-zoom' }}
+      >
         {layout.branches.map((b, i) => (
           <g key={i}>
             <path d={b.path} stroke={b.color} strokeWidth="2" fill="none" opacity="0.55" />
